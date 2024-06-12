@@ -1,1 +1,22 @@
-# humit-tagger-uten-lemmatisering
+# humit-tagger-uten-lemmatisasjon 
+
+Dette prosjektet taggerer teksten som gis som parameter.
+For å installere, kreves et python-miljø. Python 3 (testet på python3.8) anbefales.
+
+    ./setup.sh
+
+For å kjøre en prøvetagging kan du enten gi et filnavn som en parameter til tag.py-skriptet ved å bruke -f-alternativet som følgende:
+
+    python3 tag.py -f norwegian_text.txt
+
+For å taggere ved å bruke spesifikt språk
+
+    python3 tag.py -bm -f norwegian_text.txt
+
+eller
+
+    python3 tag.py -nn -f norwegian_text.txt
+
+Bruk -bm for bookmål and -nn for nynorsk.
+
+Skriptet vil returnere json.
