@@ -1,0 +1,8 @@
+test_loss = 0.006098074372857809
+test_accuracy_score = 0.9993757403079682
+test_precision = 0.0
+test_recall = 0.0
+test_f1 = 0.0
+test_runtime = 43.0289
+test_samples_per_second = 87.36
+test_steps_per_second = 10.923
