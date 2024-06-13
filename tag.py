@@ -6,11 +6,10 @@ import torch
 import transformers
 import copy
 from transformers import BertTokenizerFast
-from transformers import EncoderDecoderModel
 from transformers import BertModel
-from transformers import BertConfig
-from transformers import BertLMHeadModel
-from transformers import pipeline, AutoModelForTokenClassification, AutoTokenizer
+#from transformers import BertConfig
+#from transformers import BertLMHeadModel
+from transformers import AutoModelForTokenClassification
 from pynvml import *
 from functools import cmp_to_key
 import ntpath
@@ -272,7 +271,6 @@ classification_model.eval()
 tokenization_model = AutoModelForTokenClassification.from_pretrained("./models/tokenization/")
 tokenization_model.to(tokenization_device)
 tokenization_model.eval()
-tokenization_pipeline = pipeline('ner', model = tokenization_model, tokenizer = tag_enc_tokenizer, device = int_tokenization_device)
 
 segmentation_model = AutoModelForTokenClassification.from_pretrained("./models/sentence_segmentation/")
 segmentation_model.to(segmentation_device)
@@ -284,8 +282,6 @@ for i,j in enumerate(all_vocab):
     if j.startswith("##"):
         TOKENS_STARTING_WITH_HASH[i]=True
 
-
-segmentation_classifier = pipeline("ner", model=segmentation_model, tokenizer=segmentation_tokenizer, device=int_segmentation_device)
 
 torch.no_grad()
 
@@ -301,7 +297,6 @@ ID2LABEL={i:"bm" if ID2LABEL[i]==bokmal_label else "nn" if ID2LABEL[i]==nynorsk_
 
 
 def tag(text , write_output_to,  given_lang="au"):
-    global segmentation_classifier
     global segmentation_tokenizer
     global segmentation_device
     global segmentation_model
