@@ -14,6 +14,9 @@ from transformers import pipeline, AutoModelForTokenClassification, AutoTokenize
 from pynvml import *
 from functools import cmp_to_key
 
+import logging
+logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
+
 os.environ["TOKENIZERS_PARALLELISM"]="false"
 enc_max_length=512
 
@@ -372,7 +375,7 @@ def tag(text , given_lang="au"):
         labels_output.extend(label_data)
 
     # Determine the languge. If the language is given as parameter use that.
-    # If not, is labels_ids to determine the language   
+    # If not, use labels_ids to determine the language
     if given_lang=="au" or given_lang==None:
         if labels_ids[1]>labels_ids[2]:
             class_to_label=class_to_label_nn
@@ -468,8 +471,8 @@ def tag(text , given_lang="au"):
             my_batch["token_type_ids"]=my_batch["token_type_ids"].to(tokenization_model.device)
         outputs = tokenization_model(**my_batch)
         tokenization_output=outputs.logits.argmax(-1)
-        for i in range(int(classification_output.size()[0])):
-            
+
+        for i in range(int(classification_output.size()[0])):            
             classes = [class_to_label[ classification_model.config.id2label[t.item()] ] if classification_model.config.id2label[t.item()] in class_to_label else "" for t in classification_output[i]]
             tag=[]
             for j,k,l in zip(my_batch["input_ids"][i], tokenization_output[i], classes):
@@ -491,7 +494,7 @@ def tag(text , given_lang="au"):
             print(json.dumps(tag))
 
 def main():
-
+    global BATCH_SIZE
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--file", dest="filename",
                     help="file to process", metavar="FILE")
@@ -501,8 +504,15 @@ def main():
                     help='Tag Nynorsk')
     parser.add_argument("-au", dest='spraak', action='store_const', const='au', default='au',
                     help='Identify the langauge (default)')
+    parser.add_argument('-b','--batch-size', action="store", default="8",type=str, required=False, help='Batch size for the GPU processing.')
 
     args = parser.parse_args()
+
+    if args.batch_size is not None:
+        try:
+            BATCH_SIZE=int(args.batch_size)
+        except:
+            pass
  
     if args.filename is not None:
         if os.path.isfile(args.filename):

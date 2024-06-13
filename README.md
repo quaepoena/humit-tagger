@@ -19,4 +19,8 @@ eller
 
 Bruk -bm for bookmål and -nn for nynorsk.
 
+CUDA-basert GPU anbefales. For å stille inn batchstørrelsen, bruk følgende:
+
+    python3 tag.py -b 16 -f norwegian_text.txt
+
 Skriptet vil returnere json.
