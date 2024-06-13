@@ -23,4 +23,10 @@ CUDA-basert GPU anbefales. For å stille inn batchstørrelsen, bruk følgende:
 
     python3 tag.py -b 16 -f norwegian_text.txt
 
+For å taggere alle filene i en directory, bruk følgende:
+
+    python3 tag.py -i <input_directory> -o <output_directory>
+
+Directory-moden kjøres ikke rekursivt. Filene i output\_directory blir overskrevet.
+
 Skriptet vil returnere json.

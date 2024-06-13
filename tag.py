@@ -13,7 +13,7 @@ from transformers import BertLMHeadModel
 from transformers import pipeline, AutoModelForTokenClassification, AutoTokenizer
 from pynvml import *
 from functools import cmp_to_key
-
+import ntpath
 import logging
 logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
 
@@ -295,7 +295,7 @@ ID2LABEL=model_config["id2label"]
 ID2LABEL={i:"bm" if ID2LABEL[i]==bokmal_label else "nn" if ID2LABEL[i]==nynorsk_label else "" for i in ID2LABEL}
 
 
-def tag(text , given_lang="au"):
+def tag(text , write_output_to,  given_lang="au"):
     global segmentation_classifier
     global segmentation_tokenizer
     global segmentation_device
@@ -490,21 +490,35 @@ def tag(text , given_lang="au"):
                         tag.append({"w":segmentation_tokenizer.decode(j) , "t":l})
                 else:
                     tag.append({"w":segmentation_tokenizer.decode(j) , "t":l})
+            json.dump(tag,write_output_to)
+            write_output_to.write("\n")
 
-            print(json.dumps(tag))
+def get_base_name(path_and_file_name):
+    path, f_name = ntpath.split(path_and_file_name)
+    if f_name:
+        return f_name
+    else:
+        # fix the problem of paths ending with /
+        return ntpath.basename(path)
 
 def main():
     global BATCH_SIZE
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--file", dest="filename",
-                    help="file to process", metavar="FILE")
+                    help="file to process. Output to stdout.", metavar="FILE")
     parser.add_argument("-bm", dest='spraak', action='store_const', const='bm', default='au',
                     help='Tag Bokmål')
     parser.add_argument("-nn", dest='spraak', action='store_const', const='nn', default='au',
                     help='Tag Nynorsk')
     parser.add_argument("-au", dest='spraak', action='store_const', const='au', default='au',
                     help='Identify the langauge (default)')
+    parser.add_argument("-i", "--input-dir", dest="input_dir",
+                    help="directory to process each file in it. Operates non-recursive. An output directory must be provided for use with this option. The language is identified automatic for each file if no language is set.", metavar="FILE")
+    parser.add_argument("-o", "--output-dir", dest="output_dir",
+                    help="directory to output tagging. Adds .json to each input file name. Overwrites existing output files. Tries to create the directory if it does not exist. An input directory must be provided for use with this option.", metavar="FILE")
+
     parser.add_argument('-b','--batch-size', action="store", default="8",type=str, required=False, help='Batch size for the GPU processing.')
+
 
     args = parser.parse_args()
 
@@ -516,11 +530,36 @@ def main():
  
     if args.filename is not None:
         if os.path.isfile(args.filename):
-            tag(open(args.filename,"r").read().strip().replace("\r",""), args.spraak ) #.split(line_separator)
-            
+            tag(open(args.filename,"r").read().strip().replace("\r",""), sys.stdout, args.spraak ) 
         else:
             print("The file " + args.filename + " could not be found.")
             exit(1)
+    elif args.input_dir is not None and args.output_dir is not None:
+            input_dir=str(args.input_dir)
+            output_dir=str(args.output_dir)
+
+            if not os.path.isdir(input_dir):
+                print("The input directory " + args.input_dir  + " could not be found.")
+                exit(1)
+
+            if output_dir[-1]=="/" or output_dir[-1]=="\\" :
+                output_dir=output_dir[0:-1]
+
+            if not os.path.isdir(output_dir):
+                os.makedirs(output_dir)
+
+            with os.scandir(input_dir) as f_names:
+                for f_name in f_names:
+                    if f_name.is_file():
+                        output_f_name = output_dir + "/" +  get_base_name(f_name) + ".json"
+
+                        print("Input: " + str(f_name.path) +" ,  Output: " + output_f_name)
+
+                        with open(f_name,"r") as infile:
+                            with open(output_f_name,"w") as outfile:
+                                tag(infile.read().strip().replace("\r",""), outfile, args.spraak )
+                    else:
+                        print("Input: " + str(f_name) + " , Not a file. No output. Skipping.")
 
 if __name__ == '__main__':
     main()
