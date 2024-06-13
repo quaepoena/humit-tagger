@@ -128,6 +128,11 @@ elif len(not_used_devices)==1:
     final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
     final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
 
+elif len(not_used_devices)==0:
+    final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
+    final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
+    final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
+
 if len(final_devices)==1:
     for dev_num in final_devices:
         if dev_num in three_model_devices:
