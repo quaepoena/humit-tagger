@@ -26,6 +26,7 @@ splitted_device_list=[]
 MODEL_SENTENCE_START_ID=101
 MODEL_SENTENCE_END_ID=102
 BATCH_SIZE=8
+LANGUAGE_IDENTIFICATIOR_BATCH_SIZE=4
 if "CUDA_VISIBLE_DEVICES" in os.environ:
     splitted_device_list=os.environ["CUDA_VISIBLE_DEVICES"].split(",")
     num = 0
@@ -277,7 +278,8 @@ segmentation_model.to(segmentation_device)
 segmentation_model.eval()
 
 all_vocab=open("./models/sentence_segmentation/vocab.txt","r").read().replace("\r","").split("\n")
-TOKENS_STARTING_WITH_HASH=torch.zeros( len(all_vocab), dtype=torch.bool, device=segmentation_model.device)
+TOKENS_STARTING_WITH_HASH=torch.zeros( len(all_vocab), dtype=torch.bool, device=tokenization_model.device)
+
 for i,j in enumerate(all_vocab):
     if j.startswith("##"):
         TOKENS_STARTING_WITH_HASH[i]=True
@@ -295,7 +297,6 @@ model_config=json.load(open("./models/sentence_segmentation/config.json","r"))
 ID2LABEL=model_config["id2label"]
 ID2LABEL={i:"bm" if ID2LABEL[i]==bokmal_label else "nn" if ID2LABEL[i]==nynorsk_label else "" for i in ID2LABEL}
 
-
 def tag(text , write_output_to,  given_lang="au"):
     global segmentation_tokenizer
     global segmentation_device
@@ -307,6 +308,7 @@ def tag(text , write_output_to,  given_lang="au"):
     global MODEL_SENTENCE_END_ID
     global MAX_LENGTH_WITHOUT_CLS
     global BATCH_SIZE
+    global LANGUAGE_IDENTIFICATIOR_BATCH_SIZE
 
     global bokmal_label
     global nynorsk_label
@@ -320,12 +322,19 @@ def tag(text , write_output_to,  given_lang="au"):
     global class_to_label_nn
     global class_to_label_bm
 
+    # Just to empty anything allocated on GPU.
+    torch.cuda.empty_cache()
+
     # Here we get the whole text tokenized.
     text=text.replace("\n", " ")
     encodings = segmentation_tokenizer(text,add_special_tokens=False, return_tensors="pt").to(segmentation_model.device)
-    
+    #print(encodings["input_ids"].size())
+    #print([segmentation_tokenizer.decode(i) for i in encodings["input_ids"][0][0:5]])
+    #exit(0)
     # Save a copy of the tokenization
     original_encodings=copy.deepcopy(encodings)
+    original_encodings=original_encodings.to("cpu")
+    torch.cuda.empty_cache()
 
     # Pad to the complete size (model max_size -1 (-1 to add CLS))
     old_size=encodings["input_ids"][0].size()[0]
@@ -348,15 +357,16 @@ def tag(text , write_output_to,  given_lang="au"):
     # Add CLS to each item
     encodings["input_ids"]=torch.cat(( torch.full((row_count,1),MODEL_SENTENCE_START_ID, device=segmentation_model.device) ,encodings["input_ids"]),dim=1)
 
-    # Create attention mask and token_type_ids
+    # Create attention mask
     encodings["attention_mask"]=torch.ones_like(encodings["input_ids"], device=segmentation_model.device)
-    encodings["token_type_ids"]=torch.zeros_like(encodings["input_ids"], device=segmentation_model.device)
-
+    
     # Create batches
-    input_ids_batched=torch.split(encodings["input_ids"], BATCH_SIZE)
-    attention_mask_batched=torch.split(encodings["attention_mask"], BATCH_SIZE)
-    token_type_ids_batched=torch.split(encodings["token_type_ids"], BATCH_SIZE)
-   
+    input_ids_batched=torch.split(encodings["input_ids"], LANGUAGE_IDENTIFICATIOR_BATCH_SIZE)
+    attention_mask_batched=torch.split(encodings["attention_mask"], LANGUAGE_IDENTIFICATIOR_BATCH_SIZE)
+  
+    encodings=encodings.to("cpu")
+    torch.cuda.empty_cache()
+ 
     # Set the last chunk's attention mask according to its size 
     attention_mask_batched[-1][-1][pad_size +1:] = 0
 
@@ -364,9 +374,17 @@ def tag(text , write_output_to,  given_lang="au"):
     # While passing, we count the number of bokmal and nynorsk markers
     labels_output=[]
     labels_ids=[0,0,0]
-    for input_ids, attention_masks, token_type_ids in zip(input_ids_batched, attention_mask_batched, token_type_ids_batched):
-        current_batch={"input_ids":input_ids, "attention_mask":attention_masks, "token_type_ids":token_type_ids}
+
+    # First get them back to CPU to open space on GPU
+    input_ids_batched=[i.to("cpu") for i in input_ids_batched]
+    attention_mask_batched=[i.to("cpu") for i in attention_mask_batched]
+    torch.cuda.empty_cache()
+    
+    for input_ids, attention_masks in zip(input_ids_batched, attention_mask_batched): 
+        current_batch={"input_ids":input_ids.to(segmentation_model.device), "attention_mask":attention_masks.to(segmentation_model.device)}
         outputs = segmentation_model(**current_batch)
+        del current_batch
+        torch.cuda.empty_cache()
         label_data=outputs.logits.argmax(-1)
         label_counts_in_this_chunk=label_data.unique(return_counts=True)
         for l_id, num in zip(label_counts_in_this_chunk[0].tolist(), label_counts_in_this_chunk[1].tolist() ):
@@ -388,8 +406,11 @@ def tag(text , write_output_to,  given_lang="au"):
     
     # Serialize back 
     labels_output=torch.stack(labels_output ,dim=0)
+    torch.cuda.empty_cache()
     labels_output=labels_output[:, range(1,MAX_LENGTH_WITHOUT_CLS+1)]
+    torch.cuda.empty_cache()
     labels_output=torch.reshape(labels_output,(1,row_count *MAX_LENGTH_WITHOUT_CLS))
+    torch.cuda.empty_cache()
 
     # Now the data is split into sentences
     # So, now create sentence data as list so that this could be used 
@@ -418,7 +439,6 @@ def tag(text , write_output_to,  given_lang="au"):
     del labels_output
     del attention_mask_batched
     del input_ids_batched
-    del token_type_ids_batched
     del encodings
     del old_size
     del text
@@ -436,12 +456,11 @@ def tag(text , write_output_to,  given_lang="au"):
             if max_len>segmentation_tokenizer.model_max_length:
                 max_len=segmentation_tokenizer.model_max_length
             
-            my_attentions=torch.LongTensor([[1] * len(i[0:max_len]) + [0]*(max_len-len(i[0:max_len])) for i in my_batch]).to(classification_model.device)
+            my_attentions=torch.LongTensor([[1] * len(i[0:max_len]) + [0]*(max_len-len(i[0:max_len])) for i in my_batch]).to("cpu")
             my_batch=[i[0:max_len] + [0]*(max_len-len(i[0:max_len])) for i in my_batch]
             to_append={
-                                    "input_ids": torch.LongTensor(my_batch).to(classification_model.device),
+                                    "input_ids": torch.LongTensor(my_batch).to("cpu"),
                                     "attention_mask": my_attentions,
-                                    "token_type_ids": torch.zeros_like(my_attentions, device=classification_model.device)
                                     }
             batched_sentences.append(to_append)
             num_sentences =0
@@ -451,45 +470,47 @@ def tag(text , write_output_to,  given_lang="au"):
             num_sentences+=1
 
     max_len=len(max(my_batch, key=len))
-    my_attentions=torch.LongTensor([[1] * len(i[0:max_len]) + [0]*(max_len-len(i[0:max_len])) for i in my_batch]).to(classification_model.device)
+    my_attentions=torch.LongTensor([[1] * len(i[0:max_len]) + [0]*(max_len-len(i[0:max_len])) for i in my_batch]).to("cpu")
     my_batch=[i[0:max_len] + [0]*(max_len-len(i[0:max_len])) for i in my_batch]
     to_append={
-                            "input_ids": torch.LongTensor(my_batch).to(classification_model.device),
+                            "input_ids": torch.LongTensor(my_batch).to("cpu"),
                             "attention_mask": my_attentions,
-                            "token_type_ids": torch.zeros_like(my_attentions, device=classification_model.device)
                             }
     batched_sentences.append(to_append)
+
+    torch.cuda.empty_cache()
 
     # Now use the classification model to tag
     # and tokenization model to merge tokens
     for my_batch in batched_sentences:
+        my_batch={"input_ids":my_batch["input_ids"].to(classification_model.device), "attention_mask":my_batch["attention_mask"].to(classification_model.device)}
         outputs = classification_model(**my_batch)
         classification_output=outputs.logits.argmax(-1)
         if classification_model.device!=tokenization_model.device:
             my_batch["input_ids"]=my_batch["input_ids"].to(tokenization_model.device)
             my_batch["attention_mask"]=my_batch["attention_mask"].to(tokenization_model.device)
-            my_batch["token_type_ids"]=my_batch["token_type_ids"].to(tokenization_model.device)
         outputs = tokenization_model(**my_batch)
         tokenization_output=outputs.logits.argmax(-1)
-
+        
         for i in range(int(classification_output.size()[0])):            
             classes = [class_to_label[ classification_model.config.id2label[t.item()] ] if classification_model.config.id2label[t.item()] in class_to_label else "" for t in classification_output[i]]
             tag=[]
+            prepend_to_next=False
             for j,k,l in zip(my_batch["input_ids"][i], tokenization_output[i], classes):
                 if j==MODEL_SENTENCE_START_ID:
                     continue
                 elif j==MODEL_SENTENCE_END_ID:
                     break
-
                 if TOKENS_STARTING_WITH_HASH[j]:
+                    prepend_to_next=False
                     tag[-1]["w"] += segmentation_tokenizer.decode(j)[2:]
-                elif k==0:
-                    if len(tag)>0:
-                        tag[-1]["w"] += segmentation_tokenizer.decode(j)
-                    else:
-                        tag.append({"w":segmentation_tokenizer.decode(j) , "t":l})
+                elif prepend_to_next:
+                    prepend_to_next=False
+                    tag[-1]["w"] += segmentation_tokenizer.decode(j)
                 else:
                     tag.append({"w":segmentation_tokenizer.decode(j) , "t":l})
+                if k==0:
+                    prepend_to_next=True
             json.dump(tag,write_output_to)
             write_output_to.write("\n")
 
@@ -519,6 +540,7 @@ def main():
 
     parser.add_argument('-b','--batch-size', action="store", default="8",type=str, required=False, help='Batch size for the GPU processing.')
 
+    parser.add_argument('-lb','--language-identificator-batch-size', action="store", default="4",type=str, required=False, help='Batch size for the GPU processing used in language identification. This must be less than the normal batch size since the whole input space of the model is utilized.')
 
     args = parser.parse_args()
 
@@ -527,7 +549,13 @@ def main():
             BATCH_SIZE=int(args.batch_size)
         except:
             pass
- 
+
+    if args.language_identificator_batch_size is not None:
+        try:
+            LANGUAGE_IDENTIFICATIOR_BATCH_SIZE = int(args.language_identificator_batch_size)
+        except:
+            pass
+
     if args.filename is not None:
         if os.path.isfile(args.filename):
             tag(open(args.filename,"r").read().strip().replace("\r",""), sys.stdout, args.spraak ) 
