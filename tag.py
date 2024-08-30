@@ -14,6 +14,7 @@ from pynvml import *
 from functools import cmp_to_key
 import ntpath
 import logging
+import re
 logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
 
 os.environ["TOKENIZERS_PARALLELISM"]="false"
@@ -297,6 +298,12 @@ model_config=json.load(open("./models/sentence_segmentation/config.json","r"))
 ID2LABEL=model_config["id2label"]
 ID2LABEL={i:"bm" if ID2LABEL[i]==bokmal_label else "nn" if ID2LABEL[i]==nynorsk_label else "" for i in ID2LABEL}
 
+def matcher(o):
+    return o.group(0)[0] + "\n\n" + o.group(0)[2]
+
+def split_titles(txt):
+    return re.sub(r"[^.!\?](\n)([^a-z,æ,ø,å])", matcher, txt).split("\n\n")
+
 def tag(text , write_output_to,  given_lang="au"):
     global segmentation_tokenizer
     global segmentation_device
@@ -328,9 +335,7 @@ def tag(text , write_output_to,  given_lang="au"):
     # Here we get the whole text tokenized.
     text=text.replace("\n", " ")
     encodings = segmentation_tokenizer(text,add_special_tokens=False, return_tensors="pt").to(segmentation_model.device)
-    #print(encodings["input_ids"].size())
-    #print([segmentation_tokenizer.decode(i) for i in encodings["input_ids"][0][0:5]])
-    #exit(0)
+
     # Save a copy of the tokenization
     original_encodings=copy.deepcopy(encodings)
     original_encodings=original_encodings.to("cpu")
@@ -350,7 +355,7 @@ def tag(text , write_output_to,  given_lang="au"):
 
     # Set the last token as SENTENCE END (SEP)
     encodings["input_ids"][0][old_size]=MODEL_SENTENCE_END_ID
-    
+
     # Chunk into max_length items
     encodings["input_ids"]=torch.reshape(encodings["input_ids"],(row_count,MAX_LENGTH_WITHOUT_CLS))
 
@@ -380,8 +385,9 @@ def tag(text , write_output_to,  given_lang="au"):
     attention_mask_batched=[i.to("cpu") for i in attention_mask_batched]
     torch.cuda.empty_cache()
     
-    for input_ids, attention_masks in zip(input_ids_batched, attention_mask_batched): 
-        current_batch={"input_ids":input_ids.to(segmentation_model.device), "attention_mask":attention_masks.to(segmentation_model.device)}
+    for input_ids, attention_masks in zip(input_ids_batched, attention_mask_batched):
+#torch.tensor(b_input_ids).to(device).long() 
+        current_batch={"input_ids":input_ids.to(segmentation_model.device).long(), "attention_mask":attention_masks.to(segmentation_model.device).long()}
         outputs = segmentation_model(**current_batch)
         del current_batch
         torch.cuda.empty_cache()
@@ -434,6 +440,9 @@ def tag(text , write_output_to,  given_lang="au"):
             this_sentence=[MODEL_SENTENCE_START_ID]
             last_label=label
 
+    if len(this_sentence)>1:
+        sentence_list.append(this_sentence)
+    
     # Remove any tensors from the GPU since we have sentences in the memory now
     del original_encodings
     del labels_output
@@ -469,14 +478,15 @@ def tag(text , write_output_to,  given_lang="au"):
             my_batch.append(sentence)
             num_sentences+=1
 
-    max_len=len(max(my_batch, key=len))
-    my_attentions=torch.LongTensor([[1] * len(i[0:max_len]) + [0]*(max_len-len(i[0:max_len])) for i in my_batch]).to("cpu")
-    my_batch=[i[0:max_len] + [0]*(max_len-len(i[0:max_len])) for i in my_batch]
-    to_append={
+    if len(my_batch)>0:
+        max_len=len(max(my_batch, key=len))
+        my_attentions=torch.LongTensor([[1] * len(i[0:max_len]) + [0]*(max_len-len(i[0:max_len])) for i in my_batch]).to("cpu")
+        my_batch=[i[0:max_len] + [0]*(max_len-len(i[0:max_len])) for i in my_batch]
+        to_append={
                             "input_ids": torch.LongTensor(my_batch).to("cpu"),
                             "attention_mask": my_attentions,
                             }
-    batched_sentences.append(to_append)
+        batched_sentences.append(to_append)
 
     torch.cuda.empty_cache()
 
@@ -558,7 +568,9 @@ def main():
 
     if args.filename is not None:
         if os.path.isfile(args.filename):
-            tag(open(args.filename,"r").read().strip().replace("\r",""), sys.stdout, args.spraak ) 
+            strs=split_titles(open(args.filename,"r").read().strip().replace("\r",""))
+            for s in strs:
+                tag(s, sys.stdout, args.spraak ) 
         else:
             print("The file " + args.filename + " could not be found.")
             exit(1)
@@ -585,7 +597,9 @@ def main():
 
                         with open(f_name,"r") as infile:
                             with open(output_f_name,"w") as outfile:
-                                tag(infile.read().strip().replace("\r",""), outfile, args.spraak )
+                                strs=split_titles(infile.read().strip().replace("\r",""))
+                                for s in strs:
+                                    tag(s, outfile, args.spraak )
                     else:
                         print("Input: " + str(f_name) + " , Not a file. No output. Skipping.")
 
