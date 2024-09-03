@@ -240,9 +240,7 @@ for c in class_list:
 class_to_label_nn={c:sorted(list(class_to_label_nn[c] - IGNORE_BERT_TAGS),key=cmp_key) for c in class_to_label_nn}
 
 class_to_label_nn={c:[EQUAL_TAGS[i] if i in EQUAL_TAGS else i for i in class_to_label_nn[c] ]  for c in class_to_label_nn }
-
-class_to_label_bm={c:NN_TO_BM[c] if c in NN_TO_BM  else class_to_label_nn[c]   for c in class_to_label_nn}
-
+class_to_label_bm={c:[NN_TO_BM[i] if i in NN_TO_BM else i for i in class_to_label_nn[c]]   for c in class_to_label_nn}
 
 if int_classification_device == -1:
     classification_device="cpu"
@@ -398,6 +396,7 @@ def tag(text , write_output_to,  given_lang="au"):
                 labels_ids[l_id]+=num
         labels_output.extend(label_data)
 
+
     # Determine the languge. If the language is given as parameter use that.
     # If not, use labels_ids to determine the language
     if given_lang=="au" or given_lang==None:
@@ -409,6 +408,7 @@ def tag(text , write_output_to,  given_lang="au"):
         class_to_label=class_to_label_bm
     else:
         class_to_label=class_to_label_nn
+
     
     # Serialize back 
     labels_output=torch.stack(labels_output ,dim=0)
@@ -442,7 +442,7 @@ def tag(text , write_output_to,  given_lang="au"):
 
     if len(this_sentence)>1:
         sentence_list.append(this_sentence)
-    
+   
     # Remove any tensors from the GPU since we have sentences in the memory now
     del original_encodings
     del labels_output
