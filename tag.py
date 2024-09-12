@@ -15,6 +15,7 @@ from functools import cmp_to_key
 import ntpath
 import logging
 import re
+import pickle
 logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
 
 os.environ["TOKENIZERS_PARALLELISM"]="false"
@@ -296,6 +297,45 @@ model_config=json.load(open("./models/sentence_segmentation/config.json","r"))
 ID2LABEL=model_config["id2label"]
 ID2LABEL={i:"bm" if ID2LABEL[i]==bokmal_label else "nn" if ID2LABEL[i]==nynorsk_label else "" for i in ID2LABEL}
 
+with open('nn.pickle', 'rb') as handle:
+    NN_FULLFORM_LIST = pickle.load(handle)
+
+with open('bm.pickle', 'rb') as handle:
+    BM_FULLFORM_LIST = pickle.load(handle)
+
+def get_lemma(word, tags, LIST):
+    lem = get_lemma_rest(word, tags, LIST)
+    if lem==None:
+        return word
+    else:
+        return lem
+
+def get_lemma_rest(word, tags, LIST):
+    if len(word)==1:
+        return None
+
+    pot=LIST.get(word)
+    if pot==None:
+        return get_lemma_rest(word[1:], tags, LIST)
+    else:
+        typ=pot.get(tags[0])
+        if typ==None:
+            return get_lemma_rest(word[1:], tags, LIST)
+        else:
+            if type(typ)==str:
+                return typ
+            elif type(typ)==dict:
+                scores={i:len(set(typ[i]).intersection(tags[1:])) for i in typ}
+                return max(scores, key=scores.get)
+                print(scores)
+                print(ss)
+                print(tags)
+                print(typ)
+                exit(0)
+                return ss
+            else :
+                return get_lemma_rest(word[1:], tags, LIST)
+
 def matcher(o):
     return o.group(0)[0] + "\n\n" + o.group(0)[2]
 
@@ -326,6 +366,9 @@ def tag(text , write_output_to,  given_lang="au"):
 
     global class_to_label_nn
     global class_to_label_bm
+
+    global NN_FULLFORM_LIST
+    global BM_FULLFORM_LIST
 
     # Just to empty anything allocated on GPU.
     torch.cuda.empty_cache()
@@ -402,12 +445,16 @@ def tag(text , write_output_to,  given_lang="au"):
     if given_lang=="au" or given_lang==None:
         if labels_ids[1]>labels_ids[2]:
             class_to_label=class_to_label_nn
+            FULLFORM_LIST=NN_FULLFORM_LIST
         else:
             class_to_label=class_to_label_bm
+            FULLFORM_LIST=BM_FULLFORM_LIST
     elif given_lang=="bm":
         class_to_label=class_to_label_bm
+        FULLFORM_LIST=BM_FULLFORM_LIST
     else:
         class_to_label=class_to_label_nn
+        FULLFORM_LIST=NN_FULLFORM_LIST
 
     
     # Serialize back 
@@ -521,6 +568,8 @@ def tag(text , write_output_to,  given_lang="au"):
                     tag.append({"w":segmentation_tokenizer.decode(j) , "t":l})
                 if k==0:
                     prepend_to_next=True
+            
+            tag=[dict(tagging, **dict({"l":get_lemma(tagging["w"],tagging["t"],FULLFORM_LIST)})) for tagging in tag]
             json.dump(tag,write_output_to)
             write_output_to.write("\n")
 
