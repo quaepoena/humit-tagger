@@ -334,17 +334,24 @@ with open('bm.pickle', 'rb') as handle:
 # 4. If There are multiple options score them, and pick the most scored one
 #            Scoring is done according to the number of matching tags
 # 5. Otherwise exclude the first character and try again
-def get_lemma(word, tags, LIST):
-    if len(word)==1:
+def get_lemma(word, indice, tags, LIST):
+    if len(word[indice:])==1:
         return None
 
-    pot=LIST.get(word)
+    pot=LIST.get(word[indice:])
     if pot==None:
-        return get_lemma(word[1:], tags, LIST)
+        returned=get_lemma(word, indice+1, tags, LIST)
+        if returned==None:
+            return None
+        return word[indice:indice+1] + returned
+        #get_lemma(word, indice+1, tags, LIST)
     else:
         typ=pot.get(tags[0])
         if typ==None:
-            return get_lemma(word[1:], tags, LIST)
+            returned = get_lemma(word, indice+1, tags, LIST)
+            if returned==None:
+                return None
+            return word[indice:indice+1] + returned #+ get_lemma(word, indice+1, tags, LIST)
         else:
             if type(typ)==str:
                 return typ
@@ -352,7 +359,10 @@ def get_lemma(word, tags, LIST):
                 scores={i:len(set(typ[i]).intersection(tags[1:])) for i in typ}
                 return max(scores, key=scores.get)
             else :
-                return get_lemma(word[1:], tags, LIST)
+                returned = get_lemma(word, indice+1, tags, LIST)
+                if returned==None:
+                    return None
+                return word[indice:indice+1] + returned #+ get_lemma(word, indice+1, tags, LIST)
 
 def matcher(o):
     return o.group(0)[0] + "\n\n" + o.group(0)[2]
@@ -603,17 +613,17 @@ def tag(text , write_output_to,  given_lang="au"):
                     tag.append({"w":segmentation_tokenizer.decode(j) , "t":l})
                 if k==0:
                     prepend_to_next=True
-            tag=[dict(tagging, **dict({"l":get_lemma(tagging["w"],tagging["t"] if "t" in tagging else [20] ,FULLFORM_LIST)})) for tagging in tag]
+            tag=[dict(tagging, **dict({"l":get_lemma(tagging["w"], 0 , tagging["t"] if "t" in tagging else [20] ,FULLFORM_LIST)})) for tagging in tag]
             # if the first letter starts with Uppercase and the first lemma is None:
             if tag[0]["l"]==None and tag[0]["w"][0].isupper():
-                tag[0]["l"]=get_lemma(tag[0]["w"][0].lower() + tag[0]["w"][1:] , tag[0]["t"] if "t" in tag[0] else [20],FULLFORM_LIST)
+                tag[0]["l"]=get_lemma(tag[0]["w"][0].lower() + tag[0]["w"][1:] , 0 , tag[0]["t"] if "t" in tag[0] else [20],FULLFORM_LIST)
 
             tag=[{"w":j["w"], "l": j["w"] if j["l"]==None else j["l"] , "t":[ MAIN_TAG_LIST[k] for k in j["t"]] if "t" in j else ["ukjent"] } for j in tag]
 
-#            for www in tag:
-#                print(www["w"] +"\t" + www["l"] + "\t" + " ".join(www["t"]))
+            for www in tag:
+                print(www["w"] +"\t" + www["l"] + "\t" + " ".join(www["t"]))
 #            print() 
-            json.dump(tag,write_output_to)
+#            json.dump(tag,write_output_to)
             write_output_to.write("\n")
 
 def get_base_name(path_and_file_name):
