@@ -5,9 +5,8 @@ if sys.argv[1]=="nn":
     from fullform_nn import fullformHash
 else:
     from fullform_bm import fullformHash
-IGNORE_TAGS={"normert","unormert", "<perf-part>","perf-part", "<trans1>", "<trans2>", "<intrans2>","<intrans1>"}
 
-NN_TAGS={"$punc$","1","2","3",":<anf>:",":<komma>:",":<parentes-beg>:",":<parentes-slutt>:",":<strek>:",":adj:",":adv:",":det:",":inf-merke:",":interj:",":konj:",":prep:",":pron:",":sbu:",":subst:",":symb:",":ukjent:",":verb:","<adj>","<adv>","<dato>","<ellipse>","<kolon>","<next_token>","<ordenstal>","<perf-part>","<pres-part>","<punkt>","<romartal>","<semi>","<spm>","<st-verb>","<utrop>","akk","appell","bu","dem","eint","fem","fl","fork","forst","gen","hum","høfleg","imp","inf","komp","kvant","m/f","mask","nom","nøyt","pass","perf-part","pers","pos","poss","pres","pret","prop","refl","res","sp","sup","symb","ub","ubøy","ufl"}
+NN_TAGS={"$punc$","1","2","3","<anf>","<komma>","<parentes-beg>","<parentes-slutt>","<strek>","adj","adv","det","inf-merke","interj","konj","prep","pron","sbu","subst","symb","ukjent","verb","<adj>","<adv>","<dato>","<ellipse>","<kolon>","<next_token>","<ordenstal>","<perf-part>","<pres-part>","<punkt>","<romartal>","<semi>","<spm>","<st-verb>","<utrop>","akk","appell","bu","dem","eint","fem","fl","fork","forst","gen","hum","høfleg","imp","inf","komp","kvant","m/f","mask","nom","nøyt","pass","perf-part","pers","pos","poss","pres","pret","prop","refl","res","sp","sup","symb","ub","ubøy","ufl"}
 
 
 EQUAL_TAGS={":subst:":"subst",
@@ -43,6 +42,13 @@ NN_TO_BM ={
 NN_TAGS={i if i not in EQUAL_TAGS else EQUAL_TAGS[i] for i in NN_TAGS}
 BM_TAGS={i if i not in NN_TO_BM else NN_TO_BM[i] for i in NN_TAGS}
 
+MAIN_TAG_LIST_NN=['$punc$', '1', '2', '3', '<anf>', '<komma>', '<parentes-beg>', '<parentes-slutt>', '<strek>', 'adj', 'adv', 'det', 'inf-merke', 'interj', 'konj', 'prep', 'pron', 'sbu', 'subst', 'symb', 'ukjent', 'verb', '<adj>', '<adv>', '<dato>', '<ellipse>', '<kolon>', '<next_token>', '<ordenstal>', '<perf-part>', '<pres-part>', '<punkt>', '<romartal>', '<semi>', '<spm>', '<st-verb>', '<utrop>', 'akk', 'appell', 'bu', 'dem', 'eint', 'fem', 'fl', 'fork', 'forst', 'gen', 'hum', 'høfleg', 'imp', 'inf', 'komp', 'kvant', 'm/f', 'mask', 'nom', 'nøyt', 'pass', 'perf-part', 'pers', 'pos', 'poss', 'pres', 'pret', 'prop', 'refl', 'res', 'sp', 'sup', 'symb', 'ub', 'ubøy', 'ufl']
+
+MAIN_TAG_LIST_BM=[NN_TO_BM[i] if i in NN_TO_BM else i for i in MAIN_TAG_LIST_NN]
+
+MAIN_TAG_LIST_DICT_NN={MAIN_TAG_LIST_NN[i]:i for i in range(len(MAIN_TAG_LIST_NN))}
+MAIN_TAG_LIST_DICT_BM={MAIN_TAG_LIST_BM[i]:i for i in range(len(MAIN_TAG_LIST_BM))}
+
 def accent_count(st):
     num=0
     for i in st:
@@ -54,8 +60,10 @@ def accent_count(st):
 
 if sys.argv[1]=="nn" :
     USED_TAGS=NN_TAGS
+    MAIN_TAG_LIST_DICT = MAIN_TAG_LIST_DICT_NN
 else:
     USED_TAGS=BM_TAGS
+    MAIN_TAG_LIST_DICT = MAIN_TAG_LIST_DICT_BM
 
 
 new_dict=dict()
@@ -95,17 +103,30 @@ for word in new_dict:
                         break
             if len(new_dict[word][typ])==1:
                 new_dict[word][typ]=list(new_dict[word][typ][0].keys())[0]
+
 for word in new_dict:
     for typ in new_dict[word]:
         if type(new_dict[word][typ])==list:
             new_dict[word][typ]=dict(pair for d in new_dict[word][typ] for pair in d.items())
 
+last_dict={}
+for word in new_dict:
+    if word not in last_dict:
+        last_dict[word]=dict()
+    for typ in new_dict[word]:
+        if type(new_dict[word][typ])==str:
+                last_dict[word][MAIN_TAG_LIST_DICT[typ]]=new_dict[word][typ]
+        else:
+            last_dict[word][MAIN_TAG_LIST_DICT[typ]]=dict()
+            last_dict[word][MAIN_TAG_LIST_DICT[typ]]={i:[MAIN_TAG_LIST_DICT[j] for j in new_dict[word][typ][i]] for i in new_dict[word][typ]}
+            
+
 if sys.argv[1]=="nn":
     with open('nn.pickle', 'wb') as handle:
-        pickle.dump(new_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(last_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 else:
     with open('bm.pickle', 'wb') as handle:
-        pickle.dump(new_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(last_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 #for word in new_dict:
 #    for typ in new_dict[word]:

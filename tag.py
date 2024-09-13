@@ -176,7 +176,6 @@ label_text_file = "./models/label_list.txt"
 classes_file= "./models/labels_classifier.txt"
 with open("./models/labels_order.json", "r") as f:
     label_order = json.load(f)
-
 def compare_label(t1,t2):
     global label_order
     val1=-1
@@ -224,6 +223,8 @@ NN_TO_BM ={
         "<st-verb>": "<s-verb>"
         }
 
+
+
 class_to_label_nn={}
 with open(label_text_file, "r") as f:
     label_list= [i for i in f.read().split("\n") if i!=""]
@@ -239,9 +240,24 @@ for c in class_list:
 
 
 class_to_label_nn={c:sorted(list(class_to_label_nn[c] - IGNORE_BERT_TAGS),key=cmp_key) for c in class_to_label_nn}
-
 class_to_label_nn={c:[EQUAL_TAGS[i] if i in EQUAL_TAGS else i for i in class_to_label_nn[c] ]  for c in class_to_label_nn }
 class_to_label_bm={c:[NN_TO_BM[i] if i in NN_TO_BM else i for i in class_to_label_nn[c]]   for c in class_to_label_nn}
+
+
+MAIN_TAG_LIST_NN=['$punc$', '1', '2', '3', '<anf>', '<komma>', '<parentes-beg>', '<parentes-slutt>', '<strek>', 'adj', 'adv', 'det', 'inf-merke', 'interj', 'konj', 'prep', 'pron', 'sbu', 'subst', 'symb', 'ukjent', 'verb', '<adj>', '<adv>', '<dato>', '<ellipse>', '<kolon>', '<next_token>', '<ordenstal>', '<perf-part>', '<pres-part>', '<punkt>', '<romartal>', '<semi>', '<spm>', '<st-verb>', '<utrop>', 'akk', 'appell', 'bu', 'dem', 'eint', 'fem', 'fl', 'fork', 'forst', 'gen', 'hum', 'høfleg', 'imp', 'inf', 'komp', 'kvant', 'm/f', 'mask', 'nom', 'nøyt', 'pass', 'perf-part', 'pers', 'pos', 'poss', 'pres', 'pret', 'prop', 'refl', 'res', 'sp', 'sup', 'symb', 'ub', 'ubøy', 'ufl']
+
+MAIN_TAG_LIST_BM=[NN_TO_BM[i] if i in NN_TO_BM else i for i in MAIN_TAG_LIST_NN]
+
+
+
+MAIN_TAG_LIST_DICT_NN={MAIN_TAG_LIST_NN[i]:i for i in range(len(MAIN_TAG_LIST_NN))}
+MAIN_TAG_LIST_DICT_BM={MAIN_TAG_LIST_BM[i]:i for i in range(len(MAIN_TAG_LIST_BM))}
+
+for i in class_to_label_nn:
+    class_to_label_nn[i]=[MAIN_TAG_LIST_DICT_NN[j] for j in class_to_label_nn[i]]
+
+for i in class_to_label_bm:
+    class_to_label_bm[i]=[MAIN_TAG_LIST_DICT_BM[j] for j in class_to_label_bm[i]]
 
 if int_classification_device == -1:
     classification_device="cpu"
@@ -303,38 +319,40 @@ with open('nn.pickle', 'rb') as handle:
 with open('bm.pickle', 'rb') as handle:
     BM_FULLFORM_LIST = pickle.load(handle)
 
-def get_lemma(word, tags, LIST):
-    lem = get_lemma_rest(word, tags, LIST)
-    if lem==None:
-        return word
-    else:
-        return lem
+#def get_lemma(word, tags, LIST):
+#    lem = get_lemma_rest(word, tags, LIST)
+#    if lem==None:
+#        return word
+#    else:
+#        return lem
 
-def get_lemma_rest(word, tags, LIST):
+
+# Recursive function to seek the lemma of the word
+# 1. Check if the word is 1 character. If yes return None (not found)
+# 2. Check if the word class matches. If exclude the first character and try again
+# 3. If the word and the type matches and if there is only one option (as tring) return that
+# 4. If There are multiple options score them, and pick the most scored one
+#            Scoring is done according to the number of matching tags
+# 5. Otherwise exclude the first character and try again
+def get_lemma(word, tags, LIST):
     if len(word)==1:
         return None
 
     pot=LIST.get(word)
     if pot==None:
-        return get_lemma_rest(word[1:], tags, LIST)
+        return get_lemma(word[1:], tags, LIST)
     else:
         typ=pot.get(tags[0])
         if typ==None:
-            return get_lemma_rest(word[1:], tags, LIST)
+            return get_lemma(word[1:], tags, LIST)
         else:
             if type(typ)==str:
                 return typ
             elif type(typ)==dict:
                 scores={i:len(set(typ[i]).intersection(tags[1:])) for i in typ}
                 return max(scores, key=scores.get)
-                print(scores)
-                print(ss)
-                print(tags)
-                print(typ)
-                exit(0)
-                return ss
             else :
-                return get_lemma_rest(word[1:], tags, LIST)
+                return get_lemma(word[1:], tags, LIST)
 
 def matcher(o):
     return o.group(0)[0] + "\n\n" + o.group(0)[2]
@@ -369,6 +387,9 @@ def tag(text , write_output_to,  given_lang="au"):
 
     global NN_FULLFORM_LIST
     global BM_FULLFORM_LIST
+
+    global MAIN_TAG_LIST_NN
+    global MAIN_TAG_LIST_BM
 
     # Just to empty anything allocated on GPU.
     torch.cuda.empty_cache()
@@ -446,15 +467,19 @@ def tag(text , write_output_to,  given_lang="au"):
         if labels_ids[1]>labels_ids[2]:
             class_to_label=class_to_label_nn
             FULLFORM_LIST=NN_FULLFORM_LIST
+            MAIN_TAG_LIST=MAIN_TAG_LIST_NN
         else:
             class_to_label=class_to_label_bm
             FULLFORM_LIST=BM_FULLFORM_LIST
+            MAIN_TAG_LIST=MAIN_TAG_LIST_BM
     elif given_lang=="bm":
         class_to_label=class_to_label_bm
         FULLFORM_LIST=BM_FULLFORM_LIST
+        MAIN_TAG_LIST=MAIN_TAG_LIST_BM
     else:
         class_to_label=class_to_label_nn
         FULLFORM_LIST=NN_FULLFORM_LIST
+        MAIN_TAG_LIST=MAIN_TAG_LIST_NN
 
     
     # Serialize back 
@@ -474,7 +499,11 @@ def tag(text , write_output_to,  given_lang="au"):
     for token, label in zip(original_encodings["input_ids"][0].tolist(), labels_output[0].tolist()):
         if TOKENS_STARTING_WITH_HASH[token]:
             if last_label!=0:
-                sentence_list[-1].append(token)
+                if len(sentence_list)>0:
+                    sentence_list[-1].append(token)
+                else:
+                    sentence_list=[[token]]
+#                    sentence_list.append([token])
             else:
                 this_sentence.append(token)
                 last_label=label
@@ -560,16 +589,30 @@ def tag(text , write_output_to,  given_lang="au"):
                     break
                 if TOKENS_STARTING_WITH_HASH[j]:
                     prepend_to_next=False
-                    tag[-1]["w"] += segmentation_tokenizer.decode(j)[2:]
+                    if len(tag)>0:
+                        tag[-1]["w"] += segmentation_tokenizer.decode(j)[2:]
+                    else:
+                        tag=[{"w":segmentation_tokenizer.decode(j)[2:]}]
                 elif prepend_to_next:
                     prepend_to_next=False
-                    tag[-1]["w"] += segmentation_tokenizer.decode(j)
+                    if len(tag)>0:
+                        tag[-1]["w"] += segmentation_tokenizer.decode(j)
+                    else:
+                        tag=[{"w":segmentation_tokenizer.decode(j)}]
                 else:
                     tag.append({"w":segmentation_tokenizer.decode(j) , "t":l})
                 if k==0:
                     prepend_to_next=True
-            
-            tag=[dict(tagging, **dict({"l":get_lemma(tagging["w"],tagging["t"],FULLFORM_LIST)})) for tagging in tag]
+            tag=[dict(tagging, **dict({"l":get_lemma(tagging["w"],tagging["t"] if "t" in tagging else [20] ,FULLFORM_LIST)})) for tagging in tag]
+            # if the first letter starts with Uppercase and the first lemma is None:
+            if tag[0]["l"]==None and tag[0]["w"][0].isupper():
+                tag[0]["l"]=get_lemma(tag[0]["w"][0].lower() + tag[0]["w"][1:] , tag[0]["t"] if "t" in tag[0] else [20],FULLFORM_LIST)
+
+            tag=[{"w":j["w"], "l": j["w"] if j["l"]==None else j["l"] , "t":[ MAIN_TAG_LIST[k] for k in j["t"]] if "t" in j else ["ukjent"] } for j in tag]
+
+#            for www in tag:
+#                print(www["w"] +"\t" + www["l"] + "\t" + " ".join(www["t"]))
+#            print() 
             json.dump(tag,write_output_to)
             write_output_to.write("\n")
 
@@ -600,6 +643,7 @@ def main():
     parser.add_argument('-b','--batch-size', action="store", default="8",type=str, required=False, help='Batch size for the GPU processing.')
 
     parser.add_argument('-lb','--language-identificator-batch-size', action="store", default="4",type=str, required=False, help='Batch size for the GPU processing used in language identification. This must be less than the normal batch size since the whole input space of the model is utilized.')
+
 
     args = parser.parse_args()
 
