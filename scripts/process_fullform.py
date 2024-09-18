@@ -68,15 +68,16 @@ else:
 
 new_dict=dict()
 for i in fullformHash:
-    lemmas={ j.split(" ")[0].strip("\"") : [k for k in j.split(" ")[1:] if k in USED_TAGS] for j in fullformHash[i].replace("\t","").split("\n") if j!="" }
-    
+    lemmas=[ {j.split(" ")[0].strip("\"") : [k for k in j.split(" ")[1:] if k in USED_TAGS]} for j in fullformHash[i].replace("\t","").split("\n") if j!=""]
     if i not in new_dict:
         new_dict[i]=dict()
-    for lemma in lemmas:
-        if len(lemmas[lemma])>0:
-            if lemmas[lemma][0] not in new_dict[i]:
-                new_dict[i][lemmas[lemma][0]]=list()
-            new_dict[i][lemmas[lemma][0]].append({lemma:lemmas[lemma][1:]})
+
+    for k in range(len(lemmas)):
+        for lemma in lemmas[k]:
+            if len(lemmas[k][lemma])>0:
+                if lemmas[k][lemma][0] not in new_dict[i]:
+                    new_dict[i][lemmas[k][lemma][0]]=list()
+                new_dict[i][lemmas[k][lemma][0]].append({lemma:lemmas[k][lemma][1:]})
 
 for word in new_dict:
     for typ in new_dict[word]:
@@ -109,6 +110,14 @@ for word in new_dict:
         if type(new_dict[word][typ])==list:
             new_dict[word][typ]=dict(pair for d in new_dict[word][typ] for pair in d.items())
 
+for word in new_dict:
+    for typ in new_dict[word]:
+        if type(new_dict[word][typ])==dict and len(new_dict[word][typ])==1:
+            new_dict[word][typ]=str(list(new_dict[word][typ].keys())[0])
+
+#for word in new_dict:
+#    all_forms=set([])            
+
 last_dict={}
 for word in new_dict:
     if word not in last_dict:
@@ -119,7 +128,12 @@ for word in new_dict:
         else:
             last_dict[word][MAIN_TAG_LIST_DICT[typ]]=dict()
             last_dict[word][MAIN_TAG_LIST_DICT[typ]]={i:[MAIN_TAG_LIST_DICT[j] for j in new_dict[word][typ][i]] for i in new_dict[word][typ]}
-            
+#for word in new_dict:
+
+    
+#print(last_dict["dei"])
+#exit(0)
+
 
 if sys.argv[1]=="nn":
     with open('nn.pickle', 'wb') as handle:

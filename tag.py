@@ -248,7 +248,7 @@ MAIN_TAG_LIST_NN=['$punc$', '1', '2', '3', '<anf>', '<komma>', '<parentes-beg>',
 
 MAIN_TAG_LIST_BM=[NN_TO_BM[i] if i in NN_TO_BM else i for i in MAIN_TAG_LIST_NN]
 
-
+PUNCTUATION=set([4,5,6,7,8,26,31,34,36,69])
 
 MAIN_TAG_LIST_DICT_NN={MAIN_TAG_LIST_NN[i]:i for i in range(len(MAIN_TAG_LIST_NN))}
 MAIN_TAG_LIST_DICT_BM={MAIN_TAG_LIST_BM[i]:i for i in range(len(MAIN_TAG_LIST_BM))}
@@ -319,13 +319,6 @@ with open('nn.pickle', 'rb') as handle:
 with open('bm.pickle', 'rb') as handle:
     BM_FULLFORM_LIST = pickle.load(handle)
 
-#def get_lemma(word, tags, LIST):
-#    lem = get_lemma_rest(word, tags, LIST)
-#    if lem==None:
-#        return word
-#    else:
-#        return lem
-
 
 # Recursive function to seek the lemma of the word
 # 1. Check if the word is 1 character. If yes return None (not found)
@@ -335,23 +328,22 @@ with open('bm.pickle', 'rb') as handle:
 #            Scoring is done according to the number of matching tags
 # 5. Otherwise exclude the first character and try again
 def get_lemma(word, indice, tags, LIST):
+
     if len(word[indice:])==1:
         return None
-
-    pot=LIST.get(word[indice:])
+    pot=LIST.get(str(word[indice:]))
     if pot==None:
         returned=get_lemma(word, indice+1, tags, LIST)
         if returned==None:
             return None
         return word[indice:indice+1] + returned
-        #get_lemma(word, indice+1, tags, LIST)
     else:
         typ=pot.get(tags[0])
         if typ==None:
             returned = get_lemma(word, indice+1, tags, LIST)
             if returned==None:
                 return None
-            return word[indice:indice+1] + returned #+ get_lemma(word, indice+1, tags, LIST)
+            return word[indice:indice+1] + returned 
         else:
             if type(typ)==str:
                 return typ
@@ -362,7 +354,19 @@ def get_lemma(word, indice, tags, LIST):
                 returned = get_lemma(word, indice+1, tags, LIST)
                 if returned==None:
                     return None
-                return word[indice:indice+1] + returned #+ get_lemma(word, indice+1, tags, LIST)
+                return word[indice:indice+1] + returned 
+
+def get_lemma_for_the_first_word(word, tags, LIST):
+    if len(word)==1 and (word=="I" or word=="i"):
+        return "i"
+    pot=LIST.get(word)
+    if pot==None:
+        if(word[0].isupper()):
+            new_word=str(word[0:1].lower()) + str(word[1:])
+            return get_lemma(new_word,0,tags,LIST)
+    else:
+        return get_lemma(word,0,tags,LIST)
+        
 
 def matcher(o):
     return o.group(0)[0] + "\n\n" + o.group(0)[2]
@@ -370,7 +374,7 @@ def matcher(o):
 def split_titles(txt):
     return re.sub(r"[^.!\?](\n)([^a-z,æ,ø,å])", matcher, txt).split("\n\n")
 
-def tag(text , write_output_to,  given_lang="au"):
+def tag(text , write_output_to,  given_lang="au", output_tsv=False):
     global segmentation_tokenizer
     global segmentation_device
     global segmentation_model
@@ -391,6 +395,7 @@ def tag(text , write_output_to,  given_lang="au"):
 
     global TOKENS_STARTING_WITH_HASH
 
+    global PUNCTUATION
 
     global class_to_label_nn
     global class_to_label_bm
@@ -463,7 +468,9 @@ def tag(text , write_output_to,  given_lang="au"):
         outputs = segmentation_model(**current_batch)
         del current_batch
         torch.cuda.empty_cache()
+        
         label_data=outputs.logits.argmax(-1)
+    
         label_counts_in_this_chunk=label_data.unique(return_counts=True)
         for l_id, num in zip(label_counts_in_this_chunk[0].tolist(), label_counts_in_this_chunk[1].tolist() ):
             if l_id!=0:
@@ -528,7 +535,7 @@ def tag(text , write_output_to,  given_lang="au"):
 
     if len(this_sentence)>1:
         sentence_list.append(this_sentence)
-   
+
     # Remove any tensors from the GPU since we have sentences in the memory now
     del original_encodings
     del labels_output
@@ -613,18 +620,18 @@ def tag(text , write_output_to,  given_lang="au"):
                     tag.append({"w":segmentation_tokenizer.decode(j) , "t":l})
                 if k==0:
                     prepend_to_next=True
-            tag=[dict(tagging, **dict({"l":get_lemma(tagging["w"], 0 , tagging["t"] if "t" in tagging else [20] ,FULLFORM_LIST)})) for tagging in tag]
-            # if the first letter starts with Uppercase and the first lemma is None:
-            if tag[0]["l"]==None and tag[0]["w"][0].isupper():
-                tag[0]["l"]=get_lemma(tag[0]["w"][0].lower() + tag[0]["w"][1:] , 0 , tag[0]["t"] if "t" in tag[0] else [20],FULLFORM_LIST)
 
+            check_for_first_word=[True]+[True if "t" in tagging and len(set(tagging["t"]).intersection(PUNCTUATION))>0 else False for tagging in tag][:-1]
+            check_for_first_word=[ True if item[0] and item[1]["w"].isalpha() else False for item in zip(check_for_first_word, tag)]
+            tag=[dict(item[1], **dict({"l":get_lemma(item[1]["w"], 0 , item[1]["t"] if "t" in item[1] else [20] ,FULLFORM_LIST)if not item[0] else get_lemma_for_the_first_word(item[1]["w"], item[1]["t"] if "t" in item[1] else [20] ,FULLFORM_LIST)  }))   for item in zip(check_for_first_word,tag)  ]
             tag=[{"w":j["w"], "l": j["w"] if j["l"]==None else j["l"] , "t":[ MAIN_TAG_LIST[k] for k in j["t"]] if "t" in j else ["ukjent"] } for j in tag]
-
-            for www in tag:
-                print(www["w"] +"\t" + www["l"] + "\t" + " ".join(www["t"]))
-#            print() 
-#            json.dump(tag,write_output_to)
-            write_output_to.write("\n")
+            if output_tsv:
+                for www in tag:
+                    print(www["w"] +"\t" + www["l"] + "\t" + " ".join(www["t"]))
+                print() 
+            else:
+                json.dump(tag,write_output_to)
+                write_output_to.write("\n")
 
 def get_base_name(path_and_file_name):
     path, f_name = ntpath.split(path_and_file_name)
@@ -639,14 +646,15 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--file", dest="filename",
                     help="file to process. Output to stdout.", metavar="FILE")
-    parser.add_argument("-bm", dest='spraak', action='store_const', const='bm', default='au',
+    parser.add_argument("-bm", "--bokmal", dest='spraak', action='store_const', const='bm', default='au',
                     help='Tag Bokmål')
-    parser.add_argument("-nn", dest='spraak', action='store_const', const='nn', default='au',
+    parser.add_argument("-nn", "--nynorsk", dest='spraak', action='store_const', const='nn', default='au',
                     help='Tag Nynorsk')
-    parser.add_argument("-au", dest='spraak', action='store_const', const='au', default='au',
+    parser.add_argument("-au", "--au", dest='spraak', action='store_const', const='au', default='au',
                     help='Identify the langauge (default)')
     parser.add_argument("-i", "--input-dir", dest="input_dir",
                     help="directory to process each file in it. Operates non-recursive. An output directory must be provided for use with this option. The language is identified automatic for each file if no language is set.", metavar="FILE")
+    parser.add_argument("-t", "--tsv", dest='output_tsv', action='store_const', const=True, default=False, help="output in tab separated format.")
     parser.add_argument("-o", "--output-dir", dest="output_dir",
                     help="directory to output tagging. Adds .json to each input file name. Overwrites existing output files. Tries to create the directory if it does not exist. An input directory must be provided for use with this option.", metavar="FILE")
 
@@ -673,7 +681,7 @@ def main():
         if os.path.isfile(args.filename):
             strs=split_titles(open(args.filename,"r").read().strip().replace("\r",""))
             for s in strs:
-                tag(s, sys.stdout, args.spraak ) 
+                tag(s, sys.stdout, args.spraak, args.output_tsv ) 
         else:
             print("The file " + args.filename + " could not be found.")
             exit(1)
@@ -702,7 +710,7 @@ def main():
                             with open(output_f_name,"w") as outfile:
                                 strs=split_titles(infile.read().strip().replace("\r",""))
                                 for s in strs:
-                                    tag(s, outfile, args.spraak )
+                                    tag(s, outfile, args.spraak, args.output_tsv )
                     else:
                         print("Input: " + str(f_name) + " , Not a file. No output. Skipping.")
 
