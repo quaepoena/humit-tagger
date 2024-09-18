@@ -372,7 +372,7 @@ def matcher(o):
     return o.group(0)[0] + "\n\n" + o.group(0)[2]
 
 def split_titles(txt):
-    return re.sub(r"[^.!\?](\n)([^a-z,æ,ø,å])", matcher, txt).split("\n\n")
+    return [i.replace("\n"," ") for i in re.sub(r"[^.!\?](\n)([^a-z,æ,ø,å,\\ ])", matcher, txt).split("\n\n")]
 
 def tag(text , write_output_to,  given_lang="au", output_tsv=False):
     global segmentation_tokenizer
@@ -680,6 +680,8 @@ def main():
     if args.filename is not None:
         if os.path.isfile(args.filename):
             strs=split_titles(open(args.filename,"r").read().strip().replace("\r",""))
+            print(strs)
+            exit(0)
             for s in strs:
                 tag(s, sys.stdout, args.spraak, args.output_tsv ) 
         else:
