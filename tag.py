@@ -7,8 +7,6 @@ import transformers
 import copy
 from transformers import BertTokenizerFast
 from transformers import BertModel
-#from transformers import BertConfig
-#from transformers import BertLMHeadModel
 from transformers import AutoModelForTokenClassification
 from pynvml import *
 from functools import cmp_to_key
@@ -627,8 +625,13 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False):
             tag=[{"w":j["w"], "l": j["w"] if j["l"]==None else j["l"] , "t":[ MAIN_TAG_LIST[k] for k in j["t"]] if "t" in j else ["ukjent"] } for j in tag]
             if output_tsv:
                 for www in tag:
-                    print(www["w"] +"\t" + www["l"] + "\t" + " ".join(www["t"]))
-                print() 
+                    write_output_to.write(www["w"])
+                    write_output_to.write("\t")
+                    write_output_to.write(www["l"])
+                    write_output_to.write("\t")
+                    write_output_to.write(" ".join(www["t"]))
+                    write_output_to.write("\n")
+                write_output_to.write("\n")
             else:
                 json.dump(tag,write_output_to)
                 write_output_to.write("\n")
@@ -680,8 +683,6 @@ def main():
     if args.filename is not None:
         if os.path.isfile(args.filename):
             strs=split_titles(open(args.filename,"r").read().strip().replace("\r",""))
-            print(strs)
-            exit(0)
             for s in strs:
                 tag(s, sys.stdout, args.spraak, args.output_tsv ) 
         else:
