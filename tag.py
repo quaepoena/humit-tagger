@@ -8,7 +8,6 @@ import copy
 from transformers import BertTokenizerFast
 from transformers import BertModel
 from transformers import AutoModelForTokenClassification
-from pynvml import *
 from functools import cmp_to_key
 import ntpath
 import logging
@@ -17,46 +16,63 @@ import pickle
 logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
 
 os.environ["TOKENIZERS_PARALLELISM"]="false"
-enc_max_length=512
 
-# Process os.environ["CUDA_VISIBLE_DEVICES"]
-CUDA_TO_NV={}
-splitted_device_list=[]
-
+# GLOBAL VARIABLES (CAN BE USED TO CONFIGURE)
 MODEL_SENTENCE_START_ID=101
 MODEL_SENTENCE_END_ID=102
 BATCH_SIZE=8
 LANGUAGE_IDENTIFICATIOR_BATCH_SIZE=4
-if "CUDA_VISIBLE_DEVICES" in os.environ:
-    splitted_device_list=os.environ["CUDA_VISIBLE_DEVICES"].split(",")
-    num = 0
-    for i in splitted_device_list:
-        try:
-            dev_id=int(i)
-            CUDA_TO_NV[num]=dev_id
-            num+=1
-        except:
-            pass
-else:
-    CUDA_TO_NV=None
+MANUAL_DEVICES=[]
+LABEL_LIST_FILE = "./models/label_list.txt"
+LABEL_CLASSES_FILE= "./models/labels_classifier.txt"
+LABEL_ORDER_FILE="./models/labels_order.json"
+MODELS_DIR="./models"
+BOKMAL_LABEL="B"
+NYNORSK_LABEL="N"
+BOKMAL_LABEL_ID=1
+NYNORSK_LABEL_ID=2
+NN_FULLFORM_LIST=None
+BM_FULLFORM_LIST=None
+ID2LABEL=None
+LABEL2ID=None
+LABEL_ORDER=None
+PUNCTUATION=set([4,5,6,7,8,26,31,34,36,69])
+IGNORE_BERT_TAGS={"$punc$"}
 
-int_classification_device=-1  # -1 for cpu or gpu id
-int_tokenization_device=-1    # -1 for cpu or gpu id 
-int_segmentation_device=-1  # -1 for cpu or gpu id
+EQUAL_TAGS={":subst:":"subst",
+            ":ukjent:": "ukjent",
+            ":adj:":"adj",
+            ":prep:":"prep",
+            ":verb:":"verb",
+            ":det:":"det",
+            ":konj:":"konj",
+            ":pron:":"pron",
+            ":adv:":"adv",
+            ":inf-merke:":"inf-merke",
+            ":<anf>:":"<anf>",
+            ":sbu:":"sbu",
+            ":clb:":"clb",
+            ":<komma>:":"<komma>",
+            ":<strek>:":"<strek>",
+            ":<parentes-beg>:":"<parentes-beg>",
+            ":<parentes-slutt>:":"<parentes-slutt>",
+            ":interj:":"interj",
+            ":symb:":"symb"
+            }
 
-three_model_devices=[]
-two_model_devices=[]
-one_model_devices=[]
+NN_TO_BM ={
+        "høfleg":"høflig",
+        "eint":"ent",
+        "<ikkje-clb>": "<ikke-clb>",
+        "<ordenstal>": "<ordenstall>",
+        "<romartal>" : "<romertall>",
+        "bu": "be",
+        "<st-verb>": "<s-verb>"
+        }
 
-not_used_devices=[]
+MAIN_TAG_LIST_NN=['$punc$', '1', '2', '3', '<anf>', '<komma>', '<parentes-beg>', '<parentes-slutt>', '<strek>', 'adj', 'adv', 'det', 'inf-merke', 'interj', 'konj', 'prep', 'pron', 'sbu', 'subst', 'symb', 'ukjent', 'verb', '<adj>', '<adv>', '<dato>', '<ellipse>', '<kolon>', '<next_token>', '<ordenstal>', '<perf-part>', '<pres-part>', '<punkt>', '<romartal>', '<semi>', '<spm>', '<st-verb>', '<utrop>', 'akk', 'appell', 'bu', 'dem', 'eint', 'fem', 'fl', 'fork', 'forst', 'gen', 'hum', 'høfleg', 'imp', 'inf', 'komp', 'kvant', 'm/f', 'mask', 'nom', 'nøyt', 'pass', 'perf-part', 'pers', 'pos', 'poss', 'pres', 'pret', 'prop', 'refl', 'res', 'sp', 'sup', 'symb', 'ub', 'ubøy', 'ufl']
+MAIN_TAG_LIST_BM=None
 
-final_devices=[]
-
-gpu_scores=[]
-
-one_model_size=8000000000
-
-nvmlInit()
 
 def get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices):
     # Find one more available GPU:
@@ -86,236 +102,308 @@ def get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model
                             break
     return final_devices, found_one
 
-# Try to find three GPUs with enough memory
-for dev_num in range(int(torch.cuda.device_count())):
-    #t = torch.cuda.get_device_properties(dev_num).total_memory
-    #r = torch.cuda.memory_reserved(dev_num)
-    if CUDA_TO_NV is not None:
-        h = nvmlDeviceGetHandleByIndex(CUDA_TO_NV[dev_num])
-    else:
-        h = nvmlDeviceGetHandleByIndex(dev_num)
-
-    info = nvmlDeviceGetMemoryInfo(h)
-
-    # If three models fit
-    if info.free > one_model_size*3:
-        three_model_devices.append(dev_num)
-        if info.used< 340000000 :
-            not_used_devices.append(dev_num)
-
-    # If two models fit
-    elif info.free > one_model_size*2:
-        two_model_devices.append(dev_num)
-        if info.used< 340000000 :
-            not_used_devices.append(dev_num)
-
-    # If one model fits
-    elif info.free > one_model_size:
-        one_model_devices.append(dev_num)
-        if info.used< 340000000 :
-            not_used_devices.append(dev_num)
-
-if len(not_used_devices)>=3:
-    final_devices=not_used_devices[0:3]
-
-elif len(not_used_devices)==2:
-    final_devices.append(not_used_devices[0])
-    final_devices.append(not_used_devices[1])
-    final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
-
-elif len(not_used_devices)==1:
-    final_devices.append(not_used_devices[0])
-    final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
-    final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
-
-elif len(not_used_devices)==0:
-    final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
-    final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
-    final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
-
-if len(final_devices)==1:
-    for dev_num in final_devices:
-        if dev_num in three_model_devices:
-            if len(final_devices)<3:
-                final_devices.append(dev_num)
-            if len(final_devices)<3:
-                final_devices.append(dev_num)
-            break
-        elif dev_num in two_model_devices:
-            if len(final_devices)<3:
-                final_devices.append(dev_num)
-            if len(final_devices)==3:
-                break
-elif len(final_devices)==2:
-    for dev_num in final_devices:
-        if dev_num in three_model_devices:
-            if len(final_devices)<3:
-                final_devices.append(dev_num)
-            break
-        elif dev_num in two_model_devices:
-            if len(final_devices)<3:
-                final_devices.append(dev_num)
-            break
-
-
-
-# Finally set devices
-if len(final_devices)==1:
-    int_classification_device=final_devices[0]
-elif len(final_devices)==2:
-    int_classification_device=final_devices[0]
-    int_tokenization_device=final_devices[1]
-elif len(final_devices)==3:
-    int_classification_device=final_devices[0]
-    int_tokenization_device=final_devices[1]
-    int_segmentation_device=final_devices[2]
-
-label_text_file = "./models/label_list.txt"
-classes_file= "./models/labels_classifier.txt"
-with open("./models/labels_order.json", "r") as f:
-    label_order = json.load(f)
 def compare_label(t1,t2):
-    global label_order
+    global LABEL_ORDER
     val1=-1
     val2=-1
     key1 = t1 + " " + t2
     key2 = t2 + " " + t1
-    if key1 in label_order:
-        val1=label_order[key1]
-    if key2 in label_order:
-        val2=label_order[key2]
+    if key1 in LABEL_ORDER:
+        val1=LABEL_ORDER[key1]
+    if key2 in LABEL_ORDER:
+        val2=LABEL_ORDER[key2]
     if val1>val2:
         return -1
     return 1
 
-cmp_key = cmp_to_key(compare_label)
+def load_models_and_config():
+    global SEGMENTATION_TOKENIZER
+    global CLASSIFICATION_TOKENIZER
+    global TOKENIZETION_TOKENIZER
+    global SEGMENTATION_DEVICE
+    global CLASSIFICATION_DEVICE
+    global TOKENIZATION_DEVICE
+    global SEGMENTATION_MODEL
+    global CLASSIFICATION_MODEL
+    global TOKENIZATION_MODEL
+    global ID2LABEL
+    global LABEL2ID
+    global MODEL_SENTENCE_START_ID
+    global MODEL_SENTENCE_END_ID
+    global MAX_LENGTH_WITHOUT_CLS
+    global BATCH_SIZE
+    global LANGUAGE_IDENTIFICATIOR_BATCH_SIZE
 
-IGNORE_BERT_TAGS={"$punc$"}
-EQUAL_TAGS={":subst:":"subst",
-            ":ukjent:": "ukjent",
-            ":adj:":"adj",
-            ":prep:":"prep",
-            ":verb:":"verb",
-            ":det:":"det",
-            ":konj:":"konj",
-            ":pron:":"pron",
-            ":adv:":"adv",
-            ":inf-merke:":"inf-merke",
-            ":<anf>:":"<anf>",
-            ":sbu:":"sbu",
-            ":clb:":"clb",
-            ":<komma>:":"<komma>",
-            ":<strek>:":"<strek>",
-            ":<parentes-beg>:":"<parentes-beg>",
-            ":<parentes-slutt>:":"<parentes-slutt>",
-            ":interj:":"interj",
-            ":symb:":"symb"
-            }
-NN_TO_BM ={
-        "høfleg":"høflig",
-        "eint":"ent",
-        "<ikkje-clb>": "<ikke-clb>",
-        "<ordenstal>": "<ordenstall>",
-        "<romartal>" : "<romertall>",
-        "bu": "be",
-        "<st-verb>": "<s-verb>"
-        }
+    global BOKMAL_LABEL
+    global NYNORSK_LABEL
 
+    global BOKMAL_LABEL_ID
+    global NYNORSK_LABEL_ID
 
+    global TOKENS_STARTING_WITH_HASH
 
-class_to_label_nn={}
-with open(label_text_file, "r") as f:
-    label_list= [i for i in f.read().split("\n") if i!=""]
-classes=[]
-with open(classes_file,"r") as f:
-    class_list = [i for i in f.read().split("\n") if i!=""]
-for c in class_list:
-    classes=set()
-    for i in range(len(c)):
-        if c[i]=="1":
-            classes.add(label_list[i])
-    class_to_label_nn[c] = classes
+    global PUNCTUATION
 
+    global CLASS_TO_LABEL_NN
+    global CLASS_TO_LABEL_BM
 
-class_to_label_nn={c:sorted(list(class_to_label_nn[c] - IGNORE_BERT_TAGS),key=cmp_key) for c in class_to_label_nn}
-class_to_label_nn={c:[EQUAL_TAGS[i] if i in EQUAL_TAGS else i for i in class_to_label_nn[c] ]  for c in class_to_label_nn }
-class_to_label_bm={c:[NN_TO_BM[i] if i in NN_TO_BM else i for i in class_to_label_nn[c]]   for c in class_to_label_nn}
+    global NN_FULLFORM_LIST
+    global BM_FULLFORM_LIST
 
+    global MAIN_TAG_LIST_NN
+    global MAIN_TAG_LIST_BM
 
-MAIN_TAG_LIST_NN=['$punc$', '1', '2', '3', '<anf>', '<komma>', '<parentes-beg>', '<parentes-slutt>', '<strek>', 'adj', 'adv', 'det', 'inf-merke', 'interj', 'konj', 'prep', 'pron', 'sbu', 'subst', 'symb', 'ukjent', 'verb', '<adj>', '<adv>', '<dato>', '<ellipse>', '<kolon>', '<next_token>', '<ordenstal>', '<perf-part>', '<pres-part>', '<punkt>', '<romartal>', '<semi>', '<spm>', '<st-verb>', '<utrop>', 'akk', 'appell', 'bu', 'dem', 'eint', 'fem', 'fl', 'fork', 'forst', 'gen', 'hum', 'høfleg', 'imp', 'inf', 'komp', 'kvant', 'm/f', 'mask', 'nom', 'nøyt', 'pass', 'perf-part', 'pers', 'pos', 'poss', 'pres', 'pret', 'prop', 'refl', 'res', 'sp', 'sup', 'symb', 'ub', 'ubøy', 'ufl']
+    global MODEL_SENTENCE_START_ID
+    global MODEL_SENTENCE_END_ID
+    global BATCH_SIZE
+    global LANGUAGE_IDENTIFICATIOR_BATCH_SIZE
+    global MANUAL_DEVICES
 
-MAIN_TAG_LIST_BM=[NN_TO_BM[i] if i in NN_TO_BM else i for i in MAIN_TAG_LIST_NN]
+    global LABEL_LIST_FILE
+    global LABEL_CLASSES_FILE
+    global LABEL_ORDER_FILE
 
-PUNCTUATION=set([4,5,6,7,8,26,31,34,36,69])
+    global IGNORE_BERT_TAGS
+    global EQUAL_TAGS
+    global NN_TO_BM
 
-MAIN_TAG_LIST_DICT_NN={MAIN_TAG_LIST_NN[i]:i for i in range(len(MAIN_TAG_LIST_NN))}
-MAIN_TAG_LIST_DICT_BM={MAIN_TAG_LIST_BM[i]:i for i in range(len(MAIN_TAG_LIST_BM))}
+    global MAIN_TAG_LIST_NN
+    global MAIN_TAG_LIST_BM
 
-for i in class_to_label_nn:
-    class_to_label_nn[i]=[MAIN_TAG_LIST_DICT_NN[j] for j in class_to_label_nn[i]]
+    global BOKMAL_LABEL
+    global NYNORSK_LABEL
+    global BOKMAL_LABEL_ID
+    global NYNORSK_LABEL_ID
+    global PUNCTUATION
+    global MODELS_DIR
+    global MANUAL_DEVICES
 
-for i in class_to_label_bm:
-    class_to_label_bm[i]=[MAIN_TAG_LIST_DICT_BM[j] for j in class_to_label_bm[i]]
-
-if int_classification_device == -1:
-    classification_device="cpu"
-else:
-    classification_device="cuda:" + str(int_classification_device)
-
-if int_tokenization_device == -1:
-    tokenization_device="cpu"
-else:
-    tokenization_device="cuda:" + str(int_tokenization_device)
-
-if int_segmentation_device == -1:
-    segmentation_device="cpu"
-else:
-    segmentation_device="cuda:" + str(int_segmentation_device)
+    global LABEL_ORDER
 
 
-tag_enc_tokenizer = BertTokenizerFast.from_pretrained('NbAiLab/nb-bert-base')
-segmentation_tokenizer = tag_enc_tokenizer
-segmentation_tokenizer.model_max_length=512
+    # Try to identify NVIDIA devices. 
+    # -1 for CPU 
+    # If already set manually, use tem
+    if len(MANUAL_DEVICES)==3:
+                INT_CLASSIFICATION_DEVICE=MANUAL_DEVICES[0]
+                INT_TOKENIZATION_DEVICE=MANUAL_DEVICES[1]
+                INT_SEGMENTATION_DEVICE=MANUAL_DEVICES[2]
 
-MAX_LENGTH_WITHOUT_CLS=segmentation_tokenizer.model_max_length-1
+    # Else check PYNVML and try to figure out which device to use
+    else:
+        try:
+            # Process os.environ["CUDA_VISIBLE_DEVICES"]
+            import pynvml
+            #from pynvml import *
+            CUDA_TO_NV={}
+            splitted_device_list=[]
 
-classification_model = AutoModelForTokenClassification.from_pretrained("./models/classification/")
-classification_model.to(classification_device)
-classification_model.eval()
+            if "CUDA_VISIBLE_DEVICES" in os.environ:
+                splitted_device_list=os.environ["CUDA_VISIBLE_DEVICES"].split(",")
+                num = 0
+                for i in splitted_device_list:
+                    try:
+                        dev_id=int(i)
+                        CUDA_TO_NV[num]=dev_id
+                        num+=1
+                    except:
+                        pass
+            else:
+                CUDA_TO_NV=None
+    
+            INT_CLASSIFICATION_DEVICE=-1  # -1 for cpu or gpu id
+            INT_TOKENIZATION_DEVICE=-1    # -1 for cpu or gpu id 
+            INT_SEGMENTATION_DEVICE=-1  # -1 for cpu or gpu id
+    
+            three_model_devices=[]
+            two_model_devices=[]
+            one_model_devices=[]
 
-tokenization_model = AutoModelForTokenClassification.from_pretrained("./models/tokenization/")
-tokenization_model.to(tokenization_device)
-tokenization_model.eval()
+            not_used_devices=[]
+    
+            final_devices=[]
 
-segmentation_model = AutoModelForTokenClassification.from_pretrained("./models/sentence_segmentation/")
-segmentation_model.to(segmentation_device)
-segmentation_model.eval()
+            gpu_scores=[]
 
-all_vocab=open("./models/sentence_segmentation/vocab.txt","r").read().replace("\r","").split("\n")
-TOKENS_STARTING_WITH_HASH=torch.zeros( len(all_vocab), dtype=torch.bool, device=tokenization_model.device)
+            one_model_size=8000000000
 
-for i,j in enumerate(all_vocab):
-    if j.startswith("##"):
-        TOKENS_STARTING_WITH_HASH[i]=True
+            pynvml.nvmlInit()
+
+            # Try to find three GPUs with enough memory
+            for dev_num in range(int(torch.cuda.device_count())):
+            #t = torch.cuda.get_device_properties(dev_num).total_memory
+            #r = torch.cuda.memory_reserved(dev_num)
+                if CUDA_TO_NV is not None:
+                    h = pynvml.nvmlDeviceGetHandleByIndex(CUDA_TO_NV[dev_num])
+                else:
+                    h = pynvml.nvmlDeviceGetHandleByIndex(dev_num)
+
+                info = pynvml.nvmlDeviceGetMemoryInfo(h)
+
+                # If three models fit
+                if info.free > one_model_size*3:
+                    three_model_devices.append(dev_num)
+                    if info.used< 340000000 :
+                        not_used_devices.append(dev_num)
+
+                # If two models fit
+                elif info.free > one_model_size*2:
+                    two_model_devices.append(dev_num)
+                    if info.used< 340000000 :
+                        not_used_devices.append(dev_num)
+
+                # If one model fits
+                elif info.free > one_model_size:
+                    one_model_devices.append(dev_num)
+                    if info.used< 340000000 :
+                        not_used_devices.append(dev_num)
+
+            if len(not_used_devices)>=3:
+                final_devices=not_used_devices[0:3]
+    
+            elif len(not_used_devices)==2:
+                final_devices.append(not_used_devices[0])
+                final_devices.append(not_used_devices[1])
+                final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
+
+            elif len(not_used_devices)==1:
+                final_devices.append(not_used_devices[0])
+                final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
+                final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
+
+            elif len(not_used_devices)==0:
+                final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
+                final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
+                final_devices, found_one = get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices)
+
+            if len(final_devices)==1:
+                for dev_num in final_devices:
+                    if dev_num in three_model_devices:
+                        if len(final_devices)<3:
+                            final_devices.append(dev_num)
+                        if len(final_devices)<3:
+                            final_devices.append(dev_num)
+                        break
+                    elif dev_num in two_model_devices:
+                        if len(final_devices)<3:
+                            final_devices.append(dev_num)
+                        if len(final_devices)==3:
+                            break
+            elif len(final_devices)==2:
+                for dev_num in final_devices:
+                    if dev_num in three_model_devices:
+                        if len(final_devices)<3:
+                            final_devices.append(dev_num)
+                        break
+                    elif dev_num in two_model_devices:
+                        if len(final_devices)<3:
+                            final_devices.append(dev_num)
+                        break
+    
+            # Finally set devices
+            if len(final_devices)==1:
+                INT_CLASSIFICATION_DEVICE=final_devices[0]
+            elif len(final_devices)==2:
+                INT_CLASSIFICATION_DEVICE=final_devices[0]
+                INT_TOKENIZATION_DEVICE=final_devices[1]
+            elif len(final_devices)==3:
+                INT_CLASSIFICATION_DEVICE=final_devices[0]
+                INT_TOKENIZATION_DEVICE=final_devices[1]
+                INT_SEGMENTATION_DEVICE=final_devices[2]
+
+        # On any error in this process default to CPU
+        except:
+                INT_CLASSIFICATION_DEVICE=-1
+                INT_TOKENIZATION_DEVICE=-1
+                INT_SEGMENTATION_DEVICE=-1
+
+    if INT_CLASSIFICATION_DEVICE == -1:
+        CLASSIFICATION_DEVICE="cpu"
+    else:
+        CLASSIFICATION_DEVICE="cuda:" + str(INT_CLASSIFICATION_DEVICE)
+
+    if INT_TOKENIZATION_DEVICE == -1:
+        TOKENIZATION_DEVICE="cpu"
+    else:
+        TOKENIZATION_DEVICE="cuda:" + str(INT_TOKENIZATION_DEVICE)
+
+    if INT_SEGMENTATION_DEVICE == -1:
+        SEGMENTATION_DEVICE="cpu"
+    else:
+        SEGMENTATION_DEVICE="cuda:" + str(INT_SEGMENTATION_DEVICE)
 
 
-torch.no_grad()
+    TAG_ENC_TOKENIZER = BertTokenizerFast.from_pretrained('NbAiLab/nb-bert-base')
+    SEGMENTATION_TOKENIZER = TAG_ENC_TOKENIZER
+    SEGMENTATION_TOKENIZER.model_max_length=512
 
-bokmal_label="B"
-nynorsk_label="N"
+    MAX_LENGTH_WITHOUT_CLS=SEGMENTATION_TOKENIZER.model_max_length-1
 
-bokmal_label_id=1
-nynorsk_label_id=2
+    CLASSIFICATION_MODEL = AutoModelForTokenClassification.from_pretrained(MODELS_DIR + "/classification/")
+    CLASSIFICATION_MODEL.to(CLASSIFICATION_DEVICE)
+    CLASSIFICATION_MODEL.eval()
 
-model_config=json.load(open("./models/sentence_segmentation/config.json","r"))
-ID2LABEL=model_config["id2label"]
-ID2LABEL={i:"bm" if ID2LABEL[i]==bokmal_label else "nn" if ID2LABEL[i]==nynorsk_label else "" for i in ID2LABEL}
+    TOKENIZATION_MODEL = AutoModelForTokenClassification.from_pretrained(MODELS_DIR + "/tokenization/")
+    TOKENIZATION_MODEL.to(TOKENIZATION_DEVICE)
+    TOKENIZATION_MODEL.eval()
 
-with open('nn.pickle', 'rb') as handle:
-    NN_FULLFORM_LIST = pickle.load(handle)
+    SEGMENTATION_MODEL = AutoModelForTokenClassification.from_pretrained(MODELS_DIR + "/sentence_segmentation/")
+    SEGMENTATION_MODEL.to(SEGMENTATION_DEVICE)
+    SEGMENTATION_MODEL.eval()
 
-with open('bm.pickle', 'rb') as handle:
-    BM_FULLFORM_LIST = pickle.load(handle)
+    all_vocab=open(MODELS_DIR + "/sentence_segmentation/vocab.txt","r").read().replace("\r","").split("\n")
+    TOKENS_STARTING_WITH_HASH=torch.zeros( len(all_vocab), dtype=torch.bool, device=TOKENIZATION_MODEL.device)
+
+    for i,j in enumerate(all_vocab):
+        if j.startswith("##"):
+            TOKENS_STARTING_WITH_HASH[i]=True
+
+    torch.no_grad()
+
+    with open(LABEL_ORDER_FILE, "r") as f:
+        LABEL_ORDER = json.load(f)
+
+    cmp_key = cmp_to_key(compare_label)
+
+    CLASS_TO_LABEL_NN={}
+    with open(LABEL_LIST_FILE, "r") as f:
+        label_list= [i for i in f.read().split("\n") if i!=""]
+    classes=[]
+    with open(LABEL_CLASSES_FILE,"r") as f:
+        class_list = [i for i in f.read().split("\n") if i!=""]
+    for c in class_list:
+        classes=set()
+        for i in range(len(c)):
+            if c[i]=="1":
+                classes.add(label_list[i])
+        CLASS_TO_LABEL_NN[c] = classes
+
+
+    CLASS_TO_LABEL_NN={c:sorted(list(CLASS_TO_LABEL_NN[c] - IGNORE_BERT_TAGS),key=cmp_key) for c in CLASS_TO_LABEL_NN}
+    CLASS_TO_LABEL_NN={c:[EQUAL_TAGS[i] if i in EQUAL_TAGS else i for i in CLASS_TO_LABEL_NN[c] ]  for c in CLASS_TO_LABEL_NN }
+    CLASS_TO_LABEL_BM={c:[NN_TO_BM[i] if i in NN_TO_BM else i for i in CLASS_TO_LABEL_NN[c]]   for c in CLASS_TO_LABEL_NN}
+
+
+    MAIN_TAG_LIST_BM=[NN_TO_BM[i] if i in NN_TO_BM else i for i in MAIN_TAG_LIST_NN]
+
+    MAIN_TAG_LIST_DICT_NN={MAIN_TAG_LIST_NN[i]:i for i in range(len(MAIN_TAG_LIST_NN))}
+    MAIN_TAG_LIST_DICT_BM={MAIN_TAG_LIST_BM[i]:i for i in range(len(MAIN_TAG_LIST_BM))}
+
+    for i in CLASS_TO_LABEL_NN:
+        CLASS_TO_LABEL_NN[i]=[MAIN_TAG_LIST_DICT_NN[j] for j in CLASS_TO_LABEL_NN[i]]
+
+    for i in CLASS_TO_LABEL_BM:
+        CLASS_TO_LABEL_BM[i]=[MAIN_TAG_LIST_DICT_BM[j] for j in CLASS_TO_LABEL_BM[i]]
+
+    model_config=json.load(open(MODELS_DIR + "/sentence_segmentation/config.json","r"))
+    ID2LABEL=model_config["id2label"]
+    ID2LABEL={i:"bm" if ID2LABEL[i]==BOKMAL_LABEL else "nn" if ID2LABEL[i]==NYNORSK_LABEL else "" for i in ID2LABEL}
+
+    with open('nn.pickle', 'rb') as handle:
+        NN_FULLFORM_LIST = pickle.load(handle)
+
+    with open('bm.pickle', 'rb') as handle:
+        BM_FULLFORM_LIST = pickle.load(handle)
 
 
 # Recursive function to seek the lemma of the word
@@ -373,10 +461,10 @@ def split_titles(txt):
     return [i.replace("\n"," ") for i in re.sub(r"[^.!\?](\n)([^a-z,æ,ø,å,\\ ])", matcher, txt).split("\n\n")]
 
 def tag(text , write_output_to,  given_lang="au", output_tsv=False):
-    global segmentation_tokenizer
-    global segmentation_device
-    global segmentation_model
-    global classification_model
+    global SEGMENTATION_TOKENIZER 
+    global SEGMENTATION_DEVICE
+    global SEGMENTATION_MODEL
+    global CLASSIFICATION_MODEL
     global ID2LABEL
 
     global MODEL_SENTENCE_START_ID
@@ -385,18 +473,18 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False):
     global BATCH_SIZE
     global LANGUAGE_IDENTIFICATIOR_BATCH_SIZE
 
-    global bokmal_label
-    global nynorsk_label
+    global BOKMAL_LABEL
+    global NYNORSK_LABEL
 
-    global bokmal_label_id
-    global nynorsk_label_id
+    global BOKMAL_LABEL_ID
+    global NYNORSK_LABEL_ID
 
     global TOKENS_STARTING_WITH_HASH
 
     global PUNCTUATION
 
-    global class_to_label_nn
-    global class_to_label_bm
+    global CLASS_TO_LABEL_NN
+    global CLASS_TO_LABEL_BM
 
     global NN_FULLFORM_LIST
     global BM_FULLFORM_LIST
@@ -409,7 +497,7 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False):
 
     # Here we get the whole text tokenized.
     text=text.replace("\n", " ")
-    encodings = segmentation_tokenizer(text,add_special_tokens=False, return_tensors="pt").to(segmentation_model.device)
+    encodings = SEGMENTATION_TOKENIZER(text,add_special_tokens=False, return_tensors="pt").to(SEGMENTATION_MODEL.device)
 
     # Save a copy of the tokenization
     original_encodings=copy.deepcopy(encodings)
@@ -435,10 +523,10 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False):
     encodings["input_ids"]=torch.reshape(encodings["input_ids"],(row_count,MAX_LENGTH_WITHOUT_CLS))
 
     # Add CLS to each item
-    encodings["input_ids"]=torch.cat(( torch.full((row_count,1),MODEL_SENTENCE_START_ID, device=segmentation_model.device) ,encodings["input_ids"]),dim=1)
+    encodings["input_ids"]=torch.cat(( torch.full((row_count,1),MODEL_SENTENCE_START_ID, device=SEGMENTATION_MODEL.device) ,encodings["input_ids"]),dim=1)
 
     # Create attention mask
-    encodings["attention_mask"]=torch.ones_like(encodings["input_ids"], device=segmentation_model.device)
+    encodings["attention_mask"]=torch.ones_like(encodings["input_ids"], device=SEGMENTATION_MODEL.device)
     
     # Create batches
     input_ids_batched=torch.split(encodings["input_ids"], LANGUAGE_IDENTIFICATIOR_BATCH_SIZE)
@@ -462,8 +550,8 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False):
     
     for input_ids, attention_masks in zip(input_ids_batched, attention_mask_batched):
 #torch.tensor(b_input_ids).to(device).long() 
-        current_batch={"input_ids":input_ids.to(segmentation_model.device).long(), "attention_mask":attention_masks.to(segmentation_model.device).long()}
-        outputs = segmentation_model(**current_batch)
+        current_batch={"input_ids":input_ids.to(SEGMENTATION_MODEL.device).long(), "attention_mask":attention_masks.to(SEGMENTATION_MODEL.device).long()}
+        outputs = SEGMENTATION_MODEL(**current_batch)
         del current_batch
         torch.cuda.empty_cache()
         
@@ -480,19 +568,19 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False):
     # If not, use labels_ids to determine the language
     if given_lang=="au" or given_lang==None:
         if labels_ids[1]>labels_ids[2]:
-            class_to_label=class_to_label_nn
+            CLASS_TO_LABEL=CLASS_TO_LABEL_NN
             FULLFORM_LIST=NN_FULLFORM_LIST
             MAIN_TAG_LIST=MAIN_TAG_LIST_NN
         else:
-            class_to_label=class_to_label_bm
+            CLASS_TO_LABEL=CLASS_TO_LABEL_BM
             FULLFORM_LIST=BM_FULLFORM_LIST
             MAIN_TAG_LIST=MAIN_TAG_LIST_BM
     elif given_lang=="bm":
-        class_to_label=class_to_label_bm
+        CLASS_TO_LABEL=CLASS_TO_LABEL_BM
         FULLFORM_LIST=BM_FULLFORM_LIST
         MAIN_TAG_LIST=MAIN_TAG_LIST_BM
     else:
-        class_to_label=class_to_label_nn
+        CLASS_TO_LABEL=CLASS_TO_LABEL_NN
         FULLFORM_LIST=NN_FULLFORM_LIST
         MAIN_TAG_LIST=MAIN_TAG_LIST_NN
 
@@ -553,8 +641,8 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False):
         sentence.append(MODEL_SENTENCE_END_ID)
         if num_sentences==BATCH_SIZE:
             max_len=len(max(my_batch, key=len))
-            if max_len>segmentation_tokenizer.model_max_length:
-                max_len=segmentation_tokenizer.model_max_length
+            if max_len>SEGMENTATION_TOKENIZER.model_max_length:
+                max_len=SEGMENTATION_TOKENIZER.model_max_length
             
             my_attentions=torch.LongTensor([[1] * len(i[0:max_len]) + [0]*(max_len-len(i[0:max_len])) for i in my_batch]).to("cpu")
             my_batch=[i[0:max_len] + [0]*(max_len-len(i[0:max_len])) for i in my_batch]
@@ -584,17 +672,17 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False):
     # Now use the classification model to tag
     # and tokenization model to merge tokens
     for my_batch in batched_sentences:
-        my_batch={"input_ids":my_batch["input_ids"].to(classification_model.device), "attention_mask":my_batch["attention_mask"].to(classification_model.device)}
-        outputs = classification_model(**my_batch)
+        my_batch={"input_ids":my_batch["input_ids"].to(CLASSIFICATION_MODEL.device), "attention_mask":my_batch["attention_mask"].to(CLASSIFICATION_MODEL.device)}
+        outputs = CLASSIFICATION_MODEL(**my_batch)
         classification_output=outputs.logits.argmax(-1)
-        if classification_model.device!=tokenization_model.device:
-            my_batch["input_ids"]=my_batch["input_ids"].to(tokenization_model.device)
-            my_batch["attention_mask"]=my_batch["attention_mask"].to(tokenization_model.device)
-        outputs = tokenization_model(**my_batch)
+        if CLASSIFICATION_MODEL.device!=TOKENIZATION_MODEL.device:
+            my_batch["input_ids"]=my_batch["input_ids"].to(TOKENIZATION_MODEL.device)
+            my_batch["attention_mask"]=my_batch["attention_mask"].to(TOKENIZATION_MODEL.device)
+        outputs = TOKENIZATION_MODEL(**my_batch)
         tokenization_output=outputs.logits.argmax(-1)
         
         for i in range(int(classification_output.size()[0])):            
-            classes = [class_to_label[ classification_model.config.id2label[t.item()] ] if classification_model.config.id2label[t.item()] in class_to_label else "" for t in classification_output[i]]
+            classes = [CLASS_TO_LABEL[ CLASSIFICATION_MODEL.config.id2label[t.item()] ] if CLASSIFICATION_MODEL.config.id2label[t.item()] in CLASS_TO_LABEL else "" for t in classification_output[i]]
             tag=[]
             prepend_to_next=False
             for j,k,l in zip(my_batch["input_ids"][i], tokenization_output[i], classes):
@@ -605,17 +693,17 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False):
                 if TOKENS_STARTING_WITH_HASH[j]:
                     prepend_to_next=False
                     if len(tag)>0:
-                        tag[-1]["w"] += segmentation_tokenizer.decode(j)[2:]
+                        tag[-1]["w"] += SEGMENTATION_TOKENIZER.decode(j)[2:]
                     else:
-                        tag=[{"w":segmentation_tokenizer.decode(j)[2:]}]
+                        tag=[{"w":SEGMENTATION_TOKENIZER.decode(j)[2:]}]
                 elif prepend_to_next:
                     prepend_to_next=False
                     if len(tag)>0:
-                        tag[-1]["w"] += segmentation_tokenizer.decode(j)
+                        tag[-1]["w"] += SEGMENTATION_TOKENIZER.decode(j)
                     else:
-                        tag=[{"w":segmentation_tokenizer.decode(j)}]
+                        tag=[{"w":SEGMENTATION_TOKENIZER.decode(j)}]
                 else:
-                    tag.append({"w":segmentation_tokenizer.decode(j) , "t":l})
+                    tag.append({"w":SEGMENTATION_TOKENIZER.decode(j) , "t":l})
                 if k==0:
                     prepend_to_next=True
 
@@ -682,6 +770,7 @@ def main():
 
     if args.filename is not None:
         if os.path.isfile(args.filename):
+            load_models_and_config()
             strs=split_titles(open(args.filename,"r").read().strip().replace("\r",""))
             for s in strs:
                 tag(s, sys.stdout, args.spraak, args.output_tsv ) 
@@ -701,6 +790,8 @@ def main():
 
             if not os.path.isdir(output_dir):
                 os.makedirs(output_dir)
+
+            load_models_and_config()
 
             with os.scandir(input_dir) as f_names:
                 for f_name in f_names:
