@@ -23,7 +23,7 @@ MODEL_SENTENCE_START_ID=101
 MODEL_SENTENCE_END_ID=102
 BATCH_SIZE=8
 LANGUAGE_IDENTIFICATIOR_BATCH_SIZE=4
-MANUAL_DEVICES=[-1,-1,-1]
+MANUAL_DEVICES=[]
 LABEL_LIST_FILE = os.path.abspath(os.path.dirname(__file__)) + "/models/label_list.txt"
 LABEL_CLASSES_FILE= SCRIPT_PATH + "/models/labels_classifier.txt"
 LABEL_ORDER_FILE= SCRIPT_PATH + "/models/labels_order.json"
@@ -407,7 +407,7 @@ def load_models_and_config():
     with open(NN_FULLFORM_LIST_PATH, 'rb') as handle:
         NN_FULLFORM_LIST = pickle.load(handle)
 
-    with open(NN_FULLFORM_LIST_PATH, 'rb') as handle:
+    with open(BM_FULLFORM_LIST_PATH, 'rb') as handle:
         BM_FULLFORM_LIST = pickle.load(handle)
 
 
