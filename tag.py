@@ -18,15 +18,18 @@ logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR
 os.environ["TOKENIZERS_PARALLELISM"]="false"
 
 # GLOBAL VARIABLES (CAN BE USED TO CONFIGURE)
+SCRIPT_PATH=os.path.abspath(os.path.dirname(__file__))
 MODEL_SENTENCE_START_ID=101
 MODEL_SENTENCE_END_ID=102
 BATCH_SIZE=8
 LANGUAGE_IDENTIFICATIOR_BATCH_SIZE=4
-MANUAL_DEVICES=[]
-LABEL_LIST_FILE = "./models/label_list.txt"
-LABEL_CLASSES_FILE= "./models/labels_classifier.txt"
-LABEL_ORDER_FILE="./models/labels_order.json"
-MODELS_DIR="./models"
+MANUAL_DEVICES=[-1,-1,-1]
+LABEL_LIST_FILE = os.path.abspath(os.path.dirname(__file__)) + "/models/label_list.txt"
+LABEL_CLASSES_FILE= SCRIPT_PATH + "/models/labels_classifier.txt"
+LABEL_ORDER_FILE= SCRIPT_PATH + "/models/labels_order.json"
+MODELS_DIR= SCRIPT_PATH + "/models"
+NN_FULLFORM_LIST_PATH = SCRIPT_PATH + "/nn.pickle"
+BM_FULLFORM_LIST_PATH = SCRIPT_PATH + "/bm.pickle"
 BOKMAL_LABEL="B"
 NYNORSK_LABEL="N"
 BOKMAL_LABEL_ID=1
@@ -38,7 +41,6 @@ LABEL2ID=None
 LABEL_ORDER=None
 PUNCTUATION=set([4,5,6,7,8,26,31,34,36,69])
 IGNORE_BERT_TAGS={"$punc$"}
-
 EQUAL_TAGS={":subst:":"subst",
             ":ukjent:": "ukjent",
             ":adj:":"adj",
@@ -133,6 +135,9 @@ def load_models_and_config():
     global MAX_LENGTH_WITHOUT_CLS
     global BATCH_SIZE
     global LANGUAGE_IDENTIFICATIOR_BATCH_SIZE
+
+    global NN_FULLFORM_LIST_PATH
+    global BM_FULLFORM_LIST_PATH
 
     global BOKMAL_LABEL
     global NYNORSK_LABEL
@@ -399,10 +404,10 @@ def load_models_and_config():
     ID2LABEL=model_config["id2label"]
     ID2LABEL={i:"bm" if ID2LABEL[i]==BOKMAL_LABEL else "nn" if ID2LABEL[i]==NYNORSK_LABEL else "" for i in ID2LABEL}
 
-    with open('nn.pickle', 'rb') as handle:
+    with open(NN_FULLFORM_LIST_PATH, 'rb') as handle:
         NN_FULLFORM_LIST = pickle.load(handle)
 
-    with open('bm.pickle', 'rb') as handle:
+    with open(NN_FULLFORM_LIST_PATH, 'rb') as handle:
         BM_FULLFORM_LIST = pickle.load(handle)
 
 
@@ -460,13 +465,12 @@ def matcher(o):
 def split_titles(txt):
     return [i.replace("\n"," ") for i in re.sub(r"[^.!\?](\n)([^a-z,æ,ø,å,\\ ])", matcher, txt).split("\n\n")]
 
-def tag(text , write_output_to,  given_lang="au", output_tsv=False):
+def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identified_lang_to=None):
     global SEGMENTATION_TOKENIZER 
     global SEGMENTATION_DEVICE
     global SEGMENTATION_MODEL
     global CLASSIFICATION_MODEL
     global ID2LABEL
-
     global MODEL_SENTENCE_START_ID
     global MODEL_SENTENCE_END_ID
     global MAX_LENGTH_WITHOUT_CLS
@@ -568,18 +572,26 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False):
     # If not, use labels_ids to determine the language
     if given_lang=="au" or given_lang==None:
         if labels_ids[1]>labels_ids[2]:
+            if write_identified_lang_to!=None:
+                write_identified_lang_to.write("nn")
             CLASS_TO_LABEL=CLASS_TO_LABEL_NN
             FULLFORM_LIST=NN_FULLFORM_LIST
             MAIN_TAG_LIST=MAIN_TAG_LIST_NN
         else:
+            if write_identified_lang_to!=None:
+                write_identified_lang_to.write("bm")
             CLASS_TO_LABEL=CLASS_TO_LABEL_BM
             FULLFORM_LIST=BM_FULLFORM_LIST
             MAIN_TAG_LIST=MAIN_TAG_LIST_BM
     elif given_lang=="bm":
+        if write_identified_lang_to!=None:
+            write_identified_lang_to.write("bm")
         CLASS_TO_LABEL=CLASS_TO_LABEL_BM
         FULLFORM_LIST=BM_FULLFORM_LIST
         MAIN_TAG_LIST=MAIN_TAG_LIST_BM
     else:
+        if write_identified_lang_to!=None:
+            write_identified_lang_to.write("nn")
         CLASS_TO_LABEL=CLASS_TO_LABEL_NN
         FULLFORM_LIST=NN_FULLFORM_LIST
         MAIN_TAG_LIST=MAIN_TAG_LIST_NN
