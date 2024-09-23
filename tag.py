@@ -465,7 +465,7 @@ def matcher(o):
 def split_titles(txt):
     return [i.replace("\n"," ") for i in re.sub(r"[^.!\?](\n)([^a-z,æ,ø,å,\\ ])", matcher, txt).split("\n\n")]
 
-def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identified_lang_to=None):
+def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identified_lang_to=None, return_as_object=False):
     global SEGMENTATION_TOKENIZER 
     global SEGMENTATION_DEVICE
     global SEGMENTATION_MODEL
@@ -495,6 +495,8 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
 
     global MAIN_TAG_LIST_NN
     global MAIN_TAG_LIST_BM
+
+    all_tags_object=[]
 
     # Just to empty anything allocated on GPU.
     torch.cuda.empty_cache()
@@ -733,8 +735,13 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
                     write_output_to.write("\n")
                 write_output_to.write("\n")
             else:
-                json.dump(tag,write_output_to)
-                write_output_to.write("\n")
+                if return_as_object:
+                    all_tags_object.append(tag)
+                else:
+                    json.dump(tag,write_output_to)
+                    write_output_to.write("\n")
+    if return_as_object:
+        return all_tags_object
 
 def get_base_name(path_and_file_name):
     path, f_name = ntpath.split(path_and_file_name)
