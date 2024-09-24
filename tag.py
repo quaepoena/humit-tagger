@@ -694,7 +694,7 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
             my_batch["attention_mask"]=my_batch["attention_mask"].to(TOKENIZATION_MODEL.device)
         outputs = TOKENIZATION_MODEL(**my_batch)
         tokenization_output=outputs.logits.argmax(-1)
-        
+
         for i in range(int(classification_output.size()[0])):            
             classes = [CLASS_TO_LABEL[ CLASSIFICATION_MODEL.config.id2label[t.item()] ] if CLASSIFICATION_MODEL.config.id2label[t.item()] in CLASS_TO_LABEL else "" for t in classification_output[i]]
             tag=[]
