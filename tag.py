@@ -673,6 +673,8 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
 
     if len(my_batch)>0:
         max_len=len(max(my_batch, key=len))
+        if max_len>SEGMENTATION_TOKENIZER.model_max_length:                                                               
+            max_len=SEGMENTATION_TOKENIZER.model_max_length 
         my_attentions=torch.LongTensor([[1] * len(i[0:max_len]) + [0]*(max_len-len(i[0:max_len])) for i in my_batch]).to("cpu")
         my_batch=[i[0:max_len] + [0]*(max_len-len(i[0:max_len])) for i in my_batch]
         to_append={
