@@ -41,6 +41,9 @@ LABEL2ID=None
 LABEL_ORDER=None
 PUNCTUATION=set([4,5,6,7,8,26,31,34,36,69])
 IGNORE_BERT_TAGS={"$punc$"}
+SUBST_TAG=18
+PROP_TAG=64
+GEN_TAG=46
 EQUAL_TAGS={":subst:":"subst",
             ":ukjent:": "ukjent",
             ":adj:":"adj",
@@ -184,7 +187,6 @@ def load_models_and_config():
     global MANUAL_DEVICES
 
     global LABEL_ORDER
-
 
     # Try to identify NVIDIA devices. 
     # -1 for CPU 
@@ -418,20 +420,46 @@ def load_models_and_config():
 # 4. If There are multiple options score them, and pick the most scored one
 #            Scoring is done according to the number of matching tags
 # 5. Otherwise exclude the first character and try again
-def get_lemma(word, indice, tags, LIST):
 
+# First this function is called to check gen tag. It removes 's ' and s at the end of the word then
+# runs the actual lemma function
+def get_lemma(word,indice, tags,LIST):
+    global GEN_TAG
+    if GEN_TAG in tags:
+        if word.endswith("'s") or word.endswith("'S"):
+            word=word[:-2]
+            lem=get_lemma_after_check(word,indice,tags,LIST)
+            if lem==None:
+                return word
+        elif word.endswith("s") or word.endswith("S") or word.endswith("'"):
+            word=word[:-1]
+            lem=get_lemma_after_check(word,indice,tags,LIST)
+            if lem==None:
+                return word
+    return get_lemma_after_check(word,indice,tags,LIST)
+            
+def get_lemma_after_check(word, indice, tags, LIST):
+    global SUBST_TAG
+    global PROP_TAG
+
+    # If the word is only one character return None
     if len(word[indice:])==1:
         return None
+
+    # If the word only has subst and prop as tags return the rest of the word as lemma for the rest
+    if len(tags)==2 and (tags[0]==SUBST_TAG and tags[1]==PROP_TAG or tags[0]==PROP_TAG and tags[1]==SUBST_TAG):
+        return word[indice:]
+
     pot=LIST.get(str(word[indice:]))
     if pot==None:
-        returned=get_lemma(word, indice+1, tags, LIST)
+        returned=get_lemma_after_check(word, indice+1, tags, LIST)
         if returned==None:
             return None
         return word[indice:indice+1] + returned
     else:
         typ=pot.get(tags[0])
         if typ==None:
-            returned = get_lemma(word, indice+1, tags, LIST)
+            returned = get_lemma_after_check(word, indice+1, tags, LIST)
             if returned==None:
                 return None
             return word[indice:indice+1] + returned 
@@ -442,7 +470,7 @@ def get_lemma(word, indice, tags, LIST):
                 scores={i:len(set(typ[i]).intersection(tags[1:])) for i in typ}
                 return max(scores, key=scores.get)
             else :
-                returned = get_lemma(word, indice+1, tags, LIST)
+                returned = get_lemma_after_check(word, indice+1, tags, LIST)
                 if returned==None:
                     return None
                 return word[indice:indice+1] + returned 
