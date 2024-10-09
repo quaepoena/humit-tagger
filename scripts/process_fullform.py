@@ -108,12 +108,25 @@ for word in new_dict:
 for word in new_dict:
     for typ in new_dict[word]:
         if type(new_dict[word][typ])==list:
-            new_dict[word][typ]=dict(pair for d in new_dict[word][typ] for pair in d.items())
+            new_dct=dict()
+            for lem_tag in new_dict[word][typ]:
+               for lem in lem_tag:
+                   if lem not in new_dct:
+                       new_dct[lem]=list()
+                   for i in lem_tag[lem]:
+                       if i not in new_dct[lem]:
+                            new_dct[lem].append(i) 
+            new_dict[word][typ]=new_dct
+            #    print(new_dct)
+            #    print(new_dict[word])
+            #    exit(0)
+            #new_dict[word][typ]=dict(pair for d in new_dict[word][typ] for pair in d.items())
 
 for word in new_dict:
     for typ in new_dict[word]:
         if type(new_dict[word][typ])==dict and len(new_dict[word][typ])==1:
             new_dict[word][typ]=str(list(new_dict[word][typ].keys())[0])
+
 
 #for word in new_dict:
 #    all_forms=set([])            
