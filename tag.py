@@ -39,11 +39,12 @@ BM_FULLFORM_LIST=None
 ID2LABEL=None
 LABEL2ID=None
 LABEL_ORDER=None
-PUNCTUATION=set([4,5,6,7,8,26,31,34,36,69])
+PUNCTUATION=set([4,5,6,7,8,26,31,34,36,52,69])
 IGNORE_BERT_TAGS={"$punc$"}
 SUBST_TAG=18
 PROP_TAG=64
 GEN_TAG=46
+SECOND_PERSON_TAG=2
 EQUAL_TAGS={":subst:":"subst",
             ":ukjent:": "ukjent",
             ":adj:":"adj",
@@ -425,17 +426,36 @@ def load_models_and_config():
 # runs the actual lemma function
 def get_lemma(word,indice, tags,LIST):
     global GEN_TAG
+    global SUBST_TAG
+    global PROP_TAG
+    global SECOND_PERSON_TAG
+
     if GEN_TAG in tags:
         if word.endswith("'s") or word.endswith("'S"):
             word=word[:-2]
+            if len(tags)==3:
+                ss=set(tags)
+                if SUBST_TAG in ss and PROP_TAG in ss:
+                    return word
             lem=get_lemma_after_check(word,indice,tags,LIST)
             if lem==None:
                 return word
         elif word.endswith("s") or word.endswith("S") or word.endswith("'"):
             word=word[:-1]
+            if len(tags)==3:
+                ss=set(tags)
+                if SUBST_TAG in ss and PROP_TAG in ss:
+                    return word
             lem=get_lemma_after_check(word,indice,tags,LIST)
             if lem==None:
                 return word
+
+    # Check if høflig 
+    if word=="De":
+        if SECOND_PERSON_TAG in tags:
+            return "De"
+        else:
+            return "de"
     return get_lemma_after_check(word,indice,tags,LIST)
             
 def get_lemma_after_check(word, indice, tags, LIST):
@@ -459,10 +479,17 @@ def get_lemma_after_check(word, indice, tags, LIST):
     else:
         typ=pot.get(tags[0])
         if typ==None:
-            returned = get_lemma_after_check(word, indice+1, tags, LIST)
-            if returned==None:
-                return None
-            return word[indice:indice+1] + returned 
+            if word[indice:indice+1].isupper():
+                word=word[:indice] + word[indice].lower() + word[indice+1:]
+                returned = get_lemma_after_check(word, indice, tags, LIST)
+                if returned==None:
+                    return None
+                return returned
+            else:
+                returned = get_lemma_after_check(word, indice+1, tags, LIST)
+                if returned==None:
+                    return None
+                return word[indice:indice+1] + returned 
         else:
             if type(typ)==str:
                 return typ
@@ -476,8 +503,37 @@ def get_lemma_after_check(word, indice, tags, LIST):
                 return word[indice:indice+1] + returned 
 
 def get_lemma_for_the_first_word(word, tags, LIST):
-    if len(word)==1 and (word=="I" or word=="i"):
-        return "i"
+    global PROP_TAG
+    global SUBST_TAG
+    global GEN_TAG
+    global SECOND_PERSON_TAG
+
+    if len(word)==1:
+        if word=="I" or word=="i":
+           return "i"
+        if word=="Å" or word=="å":
+            return "å"
+
+    # If the word only has subst and prop as tags return the rest of the word as lemma for the rest
+    if len(tags)==2 and (tags[0]==SUBST_TAG and tags[1]==PROP_TAG or tags[0]==PROP_TAG and tags[1]==SUBST_TAG):
+        return word
+    elif len(tags)==3:
+        ss=set(tags)
+        if SUBST_TAG in ss and PROP_TAG in ss and GEN_TAG in ss:
+            if word.endswith("'s") or word.endswith("'S"):
+                word=word[:-2]
+                return word
+            elif word.endswith("s") or word.endswith("S") or word.endswith("'"):
+                word=word[:-1]
+                return word
+
+    # Check if høflig 
+    if word=="De":
+        if SECOND_PERSON_TAG in tags:
+            return "De"
+        else:
+            return "de"
+
     pot=LIST.get(word)
     if pot==None:
         if(word[0].isupper()):
@@ -492,6 +548,14 @@ def matcher(o):
 
 def split_titles(txt):
     return [i.replace("\n"," ") for i in re.sub(r"[^.!\?](\n)([^a-z,æ,ø,å,\\ ])", matcher, txt).split("\n\n")]
+
+# Keeping this function in comment jsut in case tags don't include kvant
+#def is_numeric_value(s):
+#    if s[0]=="-" and s[1].isnumeric():
+#        return s[1:].replace(",","").replace(".","").isnumeric()
+#    elif s[0].isnumeric():
+#        return s.replace(",","").replace(".","").isnumeric()
+#    return False
 
 def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identified_lang_to=None, return_as_object=False):
     global SEGMENTATION_TOKENIZER 
@@ -752,8 +816,9 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
                     prepend_to_next=True
 
             # Check if the words come after punctuations. Assign True for their places. False otherwise
-            check_for_first_word=[True]+[True if "t" in tagging and len(set(tagging["t"]).intersection(PUNCTUATION))>0 else False for tagging in tag][:-1]
-            
+            check_for_first_word=[True]+[True if "t" in tagging and len(set(tagging["t"]).intersection(PUNCTUATION))>0 else False for tagging in tag][:-1] 
+            #or is_numeric_value(tagging["w"])
+
             # Check if the words that come after punctuations begin with an alphanumeric. True if yes, False otherwise
             # By other words, this marks the words that needs special handling
             check_for_first_word=[ True if item[0] and item[1]["w"].isalpha() else False for item in zip(check_for_first_word, tag)]
