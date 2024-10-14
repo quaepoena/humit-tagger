@@ -17,6 +17,9 @@ logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR
 
 os.environ["TOKENIZERS_PARALLELISM"]="false"
 
+#general_counter=0
+#general_counter_all=0
+
 # GLOBAL VARIABLES (CAN BE USED TO CONFIGURE)
 SCRIPT_PATH=os.path.abspath(os.path.dirname(__file__))
 MODEL_SENTENCE_START_ID=101
@@ -44,6 +47,7 @@ IGNORE_BERT_TAGS={"$punc$"}
 SUBST_TAG=18
 PROP_TAG=64
 GEN_TAG=46
+UKJENT_TAG=20
 SECOND_PERSON_TAG=2
 EQUAL_TAGS={":subst:":"subst",
             ":ukjent:": "ukjent",
@@ -462,6 +466,11 @@ def get_lemma_after_check(word, indice, tags, LIST):
     global SUBST_TAG
     global PROP_TAG
 
+#    global general_counter ###
+#    if indice==1:
+#        print(general_counter)
+#        general_counter+=1
+
     # If the word is only one character return None
     if len(word[indice:])==1:
         return None
@@ -512,7 +521,7 @@ def get_lemma_for_the_first_word(word, tags, LIST):
         if word=="I" or word=="i":
            return "i"
         if word=="Å" or word=="å":
-            return "å"
+           return "å"
 
     # If the word only has subst and prop as tags return the rest of the word as lemma for the rest
     if len(tags)==2 and (tags[0]==SUBST_TAG and tags[1]==PROP_TAG or tags[0]==PROP_TAG and tags[1]==SUBST_TAG):
@@ -539,6 +548,7 @@ def get_lemma_for_the_first_word(word, tags, LIST):
         if(word[0].isupper()):
             new_word=str(word[0:1].lower()) + str(word[1:])
             return get_lemma(new_word,0,tags,LIST)
+        return get_lemma(word,0,tags,LIST)
     else:
         return get_lemma(word,0,tags,LIST)
         
@@ -587,6 +597,9 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
 
     global MAIN_TAG_LIST_NN
     global MAIN_TAG_LIST_BM
+    global UKJENT_TAG
+
+#    global general_counter_all
 
     all_tags_object=[]
 
@@ -824,13 +837,13 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
             check_for_first_word=[ True if item[0] and item[1]["w"].isalpha() else False for item in zip(check_for_first_word, tag)]
 
             # Get the tags for the words. If it is a marked word, use get_lemma_for_the_first_word else use get_lemma
-            tag=[dict(item[1], **dict({"l":get_lemma(item[1]["w"], 0 , item[1]["t"] if "t" in item[1] else [20] ,FULLFORM_LIST)if not item[0] else get_lemma_for_the_first_word(item[1]["w"], item[1]["t"] if "t" in item[1] else [20] ,FULLFORM_LIST)  }))   for item in zip(check_for_first_word,tag)  ]
+            tag=[dict(item[1], **dict({"l":get_lemma(item[1]["w"], 0 , item[1]["t"] if "t" in item[1] else [UKJENT_TAG] ,FULLFORM_LIST)if not item[0] else get_lemma_for_the_first_word(item[1]["w"], item[1]["t"] if "t" in item[1] else [UKJENT_TAG] ,FULLFORM_LIST)  }))   for item in zip(check_for_first_word,tag)  ]
 
             # Assign word as lemma if lemma is None.
             # Assign tag as ukjent if tag is empty set.
             tag=[{"w":j["w"], "l": j["w"] if j["l"]==None else j["l"] , "t":[ MAIN_TAG_LIST[k] for k in j["t"]] if "t" in j else ["ukjent"] } for j in tag]
-
-
+#            general_counter_all+=len(tag)
+#            print(general_counter_all)
             if output_tsv:
                 for www in tag:
                     write_output_to.write(www["w"])
@@ -935,3 +948,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
