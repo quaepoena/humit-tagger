@@ -33,14 +33,22 @@ def index():
             lang_tag=""
             all_tagged=""
             all_err=""
-
+            frmt=False
             if request.method == 'POST':
                 text= str(request.form['text']).strip()
                 lang = str(request.form['lang'])
+                frmt = False
+                if "format" in request.form:
+                    if request.form["format"]=="tsv":
+                        frmt = True
+
             elif request.method == 'GET':
                 text = str(request.args['text']).strip()
                 lang = str(request.args['lang'])
-
+                frmt = False
+                if "format" in request.args:
+                    if request.args["format"]=="tsv":
+                        frmt = True
             # Just to check everything is supposed to be
             if lang=="":
                 lang="au"
@@ -56,7 +64,7 @@ def index():
             output_content = io.StringIO()
             lang_used = io.StringIO()
 
-            sentences = tag(text, output_content, lang, False, lang_used , True)
+            sentences = tag(text, output_content, lang, frmt, lang_used , True)
 
             all_tagged = output_content.getvalue()
             lang_tag = lang_used.getvalue()
