@@ -71,7 +71,7 @@ def index():
             output_content.close()
             lang_used.close()
 
-            to_return = {"lang":lang_tag,"sentences":sentences}, 200, {'Content-Type': 'application/json'}
+            to_return = {"lang":lang_tag,"sentences":sentences if frmt else output_content.split("\n\n")}, 200, {'Content-Type': 'application/json'}
         except:
             to_return = {"error":"There is an error"}, 500,{'Content-Type': 'application/json'} 
     return to_return
