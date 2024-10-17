@@ -1,6 +1,6 @@
 # humit-tagger
 
-Dette prosjektet taggerer teksten som gis som parameter.
+Dette prosjektet tagger teksten som gis som parameter.
 For å installere, kreves et python-miljø. Python 3 (testet på python3.8) anbefales.
 
     ./setup.sh
