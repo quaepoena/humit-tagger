@@ -30,3 +30,9 @@ For å taggere alle filene i en directory, bruk følgende:
 Directory-moden kjøres ikke rekursivt. Filene i output\_directory blir overskrevet.
 
 Skriptet vil returnere json.
+
+# License
+
+[MIT license](https://github.com/textlab/norwegian_ml_tagger/blob/master/LICENSE)
+
+
