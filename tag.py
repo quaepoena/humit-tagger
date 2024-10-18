@@ -472,7 +472,7 @@ def get_lemma_after_check(word, indice, tags, LIST):
 #        general_counter+=1
 
     # If the word is only one character return None
-    if len(word[indice:])==1:
+    if len(word[indice:])<=1:
         return None
 
     # If the word only has subst and prop as tags return the rest of the word as lemma for the rest
