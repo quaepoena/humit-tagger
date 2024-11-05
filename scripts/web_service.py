@@ -34,21 +34,36 @@ def index():
             all_tagged=""
             all_err=""
             frmt=False
-            if request.method == 'POST':
-                text= str(request.form['text']).strip()
-                lang = str(request.form['lang'])
-                frmt = False
-                if "format" in request.form:
-                    if request.form["format"]=="tsv":
-                        frmt = True
+            content=None
+            try:
+                content = request.json
+            except:
+                pass
+            if content==None:
+                if request.method == 'POST':
 
-            elif request.method == 'GET':
-                text = str(request.args['text']).strip()
-                lang = str(request.args['lang'])
-                frmt = False
-                if "format" in request.args:
-                    if request.args["format"]=="tsv":
-                        frmt = True
+                    text= str(request.form['text']).strip()
+                    lang = str(request.form['lang'])
+                    frmt = False
+                    if "format" in request.form:
+                        if request.form["format"]=="tsv":
+                            frmt = True
+
+                elif request.method == 'GET':
+                    text = str(request.args['text']).strip()
+                    lang = str(request.args['lang'])
+                    frmt = False
+                    if "format" in request.args:
+                        if request.args["format"]=="tsv":
+                            frmt = True
+            else:
+                text=content["text"]
+                lang=content["lang"]
+                frmt=False
+                if "format" in content:
+                    if content["format"]=="tsv":
+                        frmt=True
+
             # Just to check everything is supposed to be
             if lang=="":
                 lang="au"
@@ -72,8 +87,8 @@ def index():
             lang_used.close()
 
             to_return = {"lang":lang_tag,"sentences":all_tagged if frmt else sentences}, 200, {'Content-Type': 'application/json'}
-        except:
-            to_return = {"error":"There is an error"}, 500,{'Content-Type': 'application/json'} 
+        except Exception as E:
+            to_return = {"error":"There is an error: " + str(E)}, 500,{'Content-Type': 'application/json'} 
     return to_return
 
 if __name__ == '__main__':
