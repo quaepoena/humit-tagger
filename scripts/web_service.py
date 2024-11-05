@@ -57,7 +57,7 @@ def index():
                         if request.args["format"]=="tsv":
                             frmt = True
             else:
-                text=content["text"]
+                text=content["text"].strip()
                 lang=content["lang"]
                 frmt=False
                 if "format" in content:
