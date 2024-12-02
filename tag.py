@@ -193,8 +193,8 @@ def load_models_and_config():
 
     global LABEL_ORDER
 
-    # Try to identify NVIDIA devices. 
-    # -1 for CPU 
+    # Try to identify NVIDIA devices.
+    # -1 for CPU
     # If already set manually, use tem
     if len(MANUAL_DEVICES)==3:
                 INT_CLASSIFICATION_DEVICE=MANUAL_DEVICES[0]
@@ -222,17 +222,17 @@ def load_models_and_config():
                         pass
             else:
                 CUDA_TO_NV=None
-    
+
             INT_CLASSIFICATION_DEVICE=-1  # -1 for cpu or gpu id
-            INT_TOKENIZATION_DEVICE=-1    # -1 for cpu or gpu id 
+            INT_TOKENIZATION_DEVICE=-1    # -1 for cpu or gpu id
             INT_SEGMENTATION_DEVICE=-1  # -1 for cpu or gpu id
-    
+
             three_model_devices=[]
             two_model_devices=[]
             one_model_devices=[]
 
             not_used_devices=[]
-    
+
             final_devices=[]
 
             gpu_scores=[]
@@ -272,7 +272,7 @@ def load_models_and_config():
 
             if len(not_used_devices)>=3:
                 final_devices=not_used_devices[0:3]
-    
+
             elif len(not_used_devices)==2:
                 final_devices.append(not_used_devices[0])
                 final_devices.append(not_used_devices[1])
@@ -311,7 +311,7 @@ def load_models_and_config():
                         if len(final_devices)<3:
                             final_devices.append(dev_num)
                         break
-    
+
             # Finally set devices
             if len(final_devices)==1:
                 INT_CLASSIFICATION_DEVICE=final_devices[0]
@@ -454,14 +454,14 @@ def get_lemma(word,indice, tags,LIST):
             if lem==None:
                 return word
 
-    # Check if høflig 
+    # Check if høflig
     if word=="De":
         if SECOND_PERSON_TAG in tags:
             return "De"
         else:
             return "de"
     return get_lemma_after_check(word,indice,tags,LIST)
-            
+
 def get_lemma_after_check(word, indice, tags, LIST):
     global SUBST_TAG
     global PROP_TAG
@@ -498,7 +498,7 @@ def get_lemma_after_check(word, indice, tags, LIST):
                 returned = get_lemma_after_check(word, indice+1, tags, LIST)
                 if returned==None:
                     return None
-                return word[indice:indice+1] + returned 
+                return word[indice:indice+1] + returned
         else:
             if type(typ)==str:
                 return typ
@@ -509,7 +509,7 @@ def get_lemma_after_check(word, indice, tags, LIST):
                 returned = get_lemma_after_check(word, indice+1, tags, LIST)
                 if returned==None:
                     return None
-                return word[indice:indice+1] + returned 
+                return word[indice:indice+1] + returned
 
 def get_lemma_for_the_first_word(word, tags, LIST):
     global PROP_TAG
@@ -536,7 +536,7 @@ def get_lemma_for_the_first_word(word, tags, LIST):
                 word=word[:-1]
                 return word
 
-    # Check if høflig 
+    # Check if høflig
     if word=="De":
         if SECOND_PERSON_TAG in tags:
             return "De"
@@ -551,7 +551,7 @@ def get_lemma_for_the_first_word(word, tags, LIST):
         return get_lemma(word,0,tags,LIST)
     else:
         return get_lemma(word,0,tags,LIST)
-        
+
 
 def matcher(o):
     return o.group(0)[0] + "\n\n" + o.group(0)[2]
@@ -568,7 +568,7 @@ def split_titles(txt):
 #    return False
 
 def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identified_lang_to=None, return_as_object=False):
-    global SEGMENTATION_TOKENIZER 
+    global SEGMENTATION_TOKENIZER
     global SEGMENTATION_DEVICE
     global SEGMENTATION_MODEL
     global CLASSIFICATION_MODEL
@@ -617,7 +617,7 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
 
     # Pad to the complete size (model max_size -1 (-1 to add CLS))
     old_size=encodings["input_ids"][0].size()[0]
-    
+
     # Pad size
     pad_size=MAX_LENGTH_WITHOUT_CLS - old_size%MAX_LENGTH_WITHOUT_CLS
 
@@ -638,15 +638,15 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
 
     # Create attention mask
     encodings["attention_mask"]=torch.ones_like(encodings["input_ids"], device=SEGMENTATION_MODEL.device)
-    
+
     # Create batches
     input_ids_batched=torch.split(encodings["input_ids"], LANGUAGE_IDENTIFICATIOR_BATCH_SIZE)
     attention_mask_batched=torch.split(encodings["attention_mask"], LANGUAGE_IDENTIFICATIOR_BATCH_SIZE)
-  
+
     encodings=encodings.to("cpu")
     torch.cuda.empty_cache()
- 
-    # Set the last chunk's attention mask according to its size 
+
+    # Set the last chunk's attention mask according to its size
     attention_mask_batched[-1][-1][pad_size +1:] = 0
 
     # Now pass all chunks through the model and get the labels
@@ -658,18 +658,18 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
     input_ids_batched=[i.to("cpu") for i in input_ids_batched]
     attention_mask_batched=[i.to("cpu") for i in attention_mask_batched]
     torch.cuda.empty_cache()
-    
+
     for input_ids, attention_masks in zip(input_ids_batched, attention_mask_batched):
-#torch.tensor(b_input_ids).to(device).long() 
+#torch.tensor(b_input_ids).to(device).long()
         current_batch={"input_ids":input_ids.to(SEGMENTATION_MODEL.device).long(), "attention_mask":attention_masks.to(SEGMENTATION_MODEL.device).long()}
         outputs = SEGMENTATION_MODEL(**current_batch)
         del current_batch
         torch.cuda.empty_cache()
-        
+
         label_data=outputs.logits.argmax(-1)
-    
+
         label_counts_in_this_chunk=label_data.unique(return_counts=True)
-        for l_id, num in zip(label_counts_in_this_chunk[0].tolist(), label_counts_in_this_chunk[1].tolist() ):
+        for l_id, num in zip(label_counts_in_this_chunk[0].tolist(), label_counts_in_this_chunk[1].tolist()):
             if l_id!=0:
                 labels_ids[l_id]+=num
         labels_output.extend(label_data)
@@ -703,8 +703,8 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
         FULLFORM_LIST=NN_FULLFORM_LIST
         MAIN_TAG_LIST=MAIN_TAG_LIST_NN
 
-    
-    # Serialize back 
+
+    # Serialize back
     labels_output=torch.stack(labels_output ,dim=0)
     torch.cuda.empty_cache()
     labels_output=labels_output[:, range(1,MAX_LENGTH_WITHOUT_CLS+1)]
@@ -713,7 +713,7 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
     torch.cuda.empty_cache()
 
     # Now the data is split into sentences
-    # So, now create sentence data as list so that this could be used 
+    # So, now create sentence data as list so that this could be used
     # in torch operations and can be input to the models
     sentence_list=[]
     this_sentence=[MODEL_SENTENCE_START_ID]
@@ -762,7 +762,7 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
             max_len=len(max(my_batch, key=len))
             if max_len>SEGMENTATION_TOKENIZER.model_max_length:
                 max_len=SEGMENTATION_TOKENIZER.model_max_length
-            
+
             my_attentions=torch.LongTensor([[1] * len(i[0:max_len]) + [0]*(max_len-len(i[0:max_len])) for i in my_batch]).to("cpu")
             my_batch=[i[0:max_len] + [0]*(max_len-len(i[0:max_len])) for i in my_batch]
             to_append={
@@ -778,8 +778,8 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
 
     if len(my_batch)>0:
         max_len=len(max(my_batch, key=len))
-        if max_len>SEGMENTATION_TOKENIZER.model_max_length:                                                               
-            max_len=SEGMENTATION_TOKENIZER.model_max_length 
+        if max_len>SEGMENTATION_TOKENIZER.model_max_length:
+            max_len=SEGMENTATION_TOKENIZER.model_max_length
         my_attentions=torch.LongTensor([[1] * len(i[0:max_len]) + [0]*(max_len-len(i[0:max_len])) for i in my_batch]).to("cpu")
         my_batch=[i[0:max_len] + [0]*(max_len-len(i[0:max_len])) for i in my_batch]
         to_append={
@@ -802,7 +802,7 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
         outputs = TOKENIZATION_MODEL(**my_batch)
         tokenization_output=outputs.logits.argmax(-1)
 
-        for i in range(int(classification_output.size()[0])):            
+        for i in range(int(classification_output.size()[0])):
             classes = [CLASS_TO_LABEL[ CLASSIFICATION_MODEL.config.id2label[t.item()] ] if CLASSIFICATION_MODEL.config.id2label[t.item()] in CLASS_TO_LABEL else "" for t in classification_output[i]]
             tag=[]
             prepend_to_next=False
@@ -829,7 +829,7 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
                     prepend_to_next=True
 
             # Check if the words come after punctuations. Assign True for their places. False otherwise
-            check_for_first_word=[True]+[True if "t" in tagging and len(set(tagging["t"]).intersection(PUNCTUATION))>0 else False for tagging in tag][:-1] 
+            check_for_first_word=[True]+[True if "t" in tagging and len(set(tagging["t"]).intersection(PUNCTUATION))>0 else False for tagging in tag][:-1]
             #or is_numeric_value(tagging["w"])
 
             # Check if the words that come after punctuations begin with an alphanumeric. True if yes, False otherwise
@@ -911,7 +911,7 @@ def main():
             load_models_and_config()
             strs=split_titles(open(args.filename,"r").read().strip().replace("\r",""))
             for s in strs:
-                tag(s, sys.stdout, args.spraak, args.output_tsv ) 
+                tag(s, sys.stdout, args.spraak, args.output_tsv)
         else:
             print("The file " + args.filename + " could not be found.")
             exit(1)
@@ -942,10 +942,9 @@ def main():
                             with open(output_f_name,"w") as outfile:
                                 strs=split_titles(infile.read().strip().replace("\r",""))
                                 for s in strs:
-                                    tag(s, outfile, args.spraak, args.output_tsv )
+                                    tag(s, outfile, args.spraak, args.output_tsv)
                     else:
                         print("Input: " + str(f_name) + " , Not a file. No output. Skipping.")
 
 if __name__ == '__main__':
     main()
-
