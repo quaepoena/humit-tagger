@@ -918,6 +918,7 @@ def main():
     elif args.input_dir is not None and args.output_dir is not None:
             input_dir=str(args.input_dir)
             output_dir=str(args.output_dir)
+            output_suf = ".tsv" if args.output_tsv else ".json"
 
             if not os.path.isdir(input_dir):
                 print("The input directory " + args.input_dir  + " could not be found.")
@@ -934,7 +935,7 @@ def main():
             with os.scandir(input_dir) as f_names:
                 for f_name in f_names:
                     if f_name.is_file():
-                        output_f_name = output_dir + "/" +  get_base_name(f_name) + ".json"
+                        output_f_name = output_dir + "/" +  get_base_name(f_name) + output_suf
 
                         print("Input: " + str(f_name.path) +" ,  Output: " + output_f_name)
 
