@@ -599,6 +599,7 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
     global MAIN_TAG_LIST_BM
     global UKJENT_TAG
 
+    global INT_TOKENIZATION_DEVICE
 #    global general_counter_all
 
     all_tags_object=[]
@@ -800,7 +801,14 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
             my_batch["input_ids"]=my_batch["input_ids"].to(TOKENIZATION_MODEL.device)
             my_batch["attention_mask"]=my_batch["attention_mask"].to(TOKENIZATION_MODEL.device)
         outputs = TOKENIZATION_MODEL(**my_batch)
+
         tokenization_output=outputs.logits.argmax(-1)
+
+        if INT_TOKENIZATION_DEVICE!=-1:
+            my_batch["input_ids"]=my_batch["input_ids"].to("cpu")
+            my_batch["attention_mask"]=my_batch["attention_mask"].to("cpu")
+            outputs=outputs.to("cpu")
+            torch.cuda.empty_cache()
 
         for i in range(int(classification_output.size()[0])):            
             classes = [CLASS_TO_LABEL[ CLASSIFICATION_MODEL.config.id2label[t.item()] ] if CLASSIFICATION_MODEL.config.id2label[t.item()] in CLASS_TO_LABEL else "" for t in classification_output[i]]
