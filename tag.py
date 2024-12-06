@@ -82,7 +82,7 @@ NN_TO_BM ={
 
 MAIN_TAG_LIST_NN=['$punc$', '1', '2', '3', '<anf>', '<komma>', '<parentes-beg>', '<parentes-slutt>', '<strek>', 'adj', 'adv', 'det', 'inf-merke', 'interj', 'konj', 'prep', 'pron', 'sbu', 'subst', 'symb', 'ukjent', 'verb', '<adj>', '<adv>', '<dato>', '<ellipse>', '<kolon>', '<next_token>', '<ordenstal>', '<perf-part>', '<pres-part>', '<punkt>', '<romartal>', '<semi>', '<spm>', '<st-verb>', '<utrop>', 'akk', 'appell', 'bu', 'dem', 'eint', 'fem', 'fl', 'fork', 'forst', 'gen', 'hum', 'høfleg', 'imp', 'inf', 'komp', 'kvant', 'm/f', 'mask', 'nom', 'nøyt', 'pass', 'perf-part', 'pers', 'pos', 'poss', 'pres', 'pret', 'prop', 'refl', 'res', 'sp', 'sup', 'symb', 'ub', 'ubøy', 'ufl']
 MAIN_TAG_LIST_BM=None
-
+INT_TOKENIZATION_DEVICE=-1
 
 def get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices):
     # Find one more available GPU:
@@ -192,6 +192,7 @@ def load_models_and_config():
     global MANUAL_DEVICES
 
     global LABEL_ORDER
+    global INT_TOKENIZATION_DEVICE
 
     # Try to identify NVIDIA devices.
     # -1 for CPU
