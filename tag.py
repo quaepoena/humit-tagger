@@ -256,19 +256,19 @@ def load_models_and_config():
                 # If three models fit
                 if info.free > one_model_size*3:
                     three_model_devices.append(dev_num)
-                    if info.used< 340000000 :
+                    if info.used< 4700000000 :
                         not_used_devices.append(dev_num)
 
                 # If two models fit
                 elif info.free > one_model_size*2:
                     two_model_devices.append(dev_num)
-                    if info.used< 340000000 :
+                    if info.used< 470000000 :
                         not_used_devices.append(dev_num)
 
                 # If one model fits
                 elif info.free > one_model_size:
                     one_model_devices.append(dev_num)
-                    if info.used< 340000000 :
+                    if info.used< 470000000 :
                         not_used_devices.append(dev_num)
 
             if len(not_used_devices)>=3:
@@ -807,6 +807,8 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
         if INT_TOKENIZATION_DEVICE!=-1:
             my_batch["input_ids"]=my_batch["input_ids"].to("cpu")
             my_batch["attention_mask"]=my_batch["attention_mask"].to("cpu")
+            classification_output=classification_output.to("cpu")
+            tokenization_output=tokenization_output.to("cpu")
             outputs.logits=outputs.logits.to("cpu")
             torch.cuda.empty_cache()
 
