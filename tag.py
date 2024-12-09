@@ -802,14 +802,12 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
             my_batch["input_ids"]=my_batch["input_ids"].to(TOKENIZATION_MODEL.device)
             my_batch["attention_mask"]=my_batch["attention_mask"].to(TOKENIZATION_MODEL.device)
         outputs = TOKENIZATION_MODEL(**my_batch)
-
         tokenization_output=outputs.logits.argmax(-1)
-
 
         if INT_TOKENIZATION_DEVICE!=-1:
             my_batch["input_ids"]=my_batch["input_ids"].to("cpu")
             my_batch["attention_mask"]=my_batch["attention_mask"].to("cpu")
-            outputs=outputs.to("cpu")
+            outputs.logits=outputs.logits.to("cpu")
             torch.cuda.empty_cache()
 
         for i in range(int(classification_output.size()[0])):            
