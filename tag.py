@@ -256,7 +256,7 @@ def load_models_and_config():
                 # If three models fit
                 if info.free > one_model_size*3:
                     three_model_devices.append(dev_num)
-                    if info.used< 4700000000 :
+                    if info.used< 470000000 :
                         not_used_devices.append(dev_num)
 
                 # If two models fit
