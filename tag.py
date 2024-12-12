@@ -932,8 +932,7 @@ def main():
                 print("The input directory " + args.input_dir  + " could not be found.")
                 exit(1)
 
-            if not os.path.isdir(output_dir):
-                os.makedirs(output_dir)
+            os.makedirs(args.output_dir, exist_ok=True)
 
             load_models_and_config()
 
