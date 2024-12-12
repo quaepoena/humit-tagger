@@ -872,14 +872,6 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
     if return_as_object:
         return all_tags_object
 
-def get_base_name(path_and_file_name):
-    path, f_name = ntpath.split(path_and_file_name)
-    if f_name:
-        return f_name
-    else:
-        # fix the problem of paths ending with /
-        return ntpath.basename(path)
-
 def main():
     global BATCH_SIZE
     parser = argparse.ArgumentParser()
@@ -936,20 +928,18 @@ def main():
 
             load_models_and_config()
 
-            with os.scandir(input_dir) as f_names:
-                for f_name in f_names:
-                    if f_name.is_file():
-                        output_f_name = output_dir + "/" +  get_base_name(f_name) + output_suf
+            for dir_path, _, files in os.walk(args.input_dir):
+                for f in files:
+                    f_name = os.path.join(dir_path, f)
+                    output_f_name = os.path.join(args.output_dir, f, output_suf)
 
-                        print("Input: " + str(f_name.path) +" ,  Output: " + output_f_name)
+                    print("Input: " + f_name + ", Output: " + output_f_name)
 
-                        with open(f_name,"r") as infile:
-                            with open(output_f_name,"w") as outfile:
-                                strs=split_titles(infile.read().strip().replace("\r",""))
-                                for s in strs:
-                                    tag(s, outfile, args.spraak, args.output_tsv)
-                    else:
-                        print("Input: " + str(f_name) + " , Not a file. No output. Skipping.")
+                    with open(f_name, "r") as infile:
+                        with open(output_f_name, "w") as outfile:
+                            strs=split_titles(infile.read().strip().replace("\r",""))
+                            for s in strs:
+                                tag(s, outfile, args.spraak, args.output_tsv)
 
 if __name__ == '__main__':
     main()
