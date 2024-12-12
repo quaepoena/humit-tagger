@@ -931,7 +931,7 @@ def main():
             for dir_path, _, files in os.walk(args.input_dir):
                 for f in files:
                     f_name = os.path.join(dir_path, f)
-                    output_f_name = os.path.join(args.output_dir, f, output_suf)
+                    output_f_name = os.path.join(args.output_dir, f) + output_suf
 
                     print("Input: " + f_name + ", Output: " + output_f_name)
 
