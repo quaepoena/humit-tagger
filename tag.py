@@ -891,11 +891,11 @@ def main():
                     help='Tag Nynorsk')
     parser.add_argument("-au", "--au", dest='spraak', action='store_const', const='au', default='au',
                     help='Identify the langauge (default)')
-    parser.add_argument("-i", "--input-dir", dest="input_dir",
-                    help="directory to process each file in it. Operates non-recursive. An output directory must be provided for use with this option. The language is identified automatic for each file if no language is set.", metavar="FILE")
+    parser.add_argument("-i", "--input-dir", dest="input_dir", type=str,
+                        help="directory to process each file in it. Operates non-recursive. An output directory must be provided for use with this option. The language is identified automatic for each file if no language is set.", metavar="FILE")
     parser.add_argument("-t", "--tsv", dest='output_tsv', action='store_const', const=True, default=False, help="output in tab separated format.")
-    parser.add_argument("-o", "--output-dir", dest="output_dir",
-                    help="directory to output tagging. Adds .json to each input file name. Overwrites existing output files. Tries to create the directory if it does not exist. An input directory must be provided for use with this option.", metavar="FILE")
+    parser.add_argument("-o", "--output-dir", dest="output_dir", type=str,
+                        help="directory to output tagging. Adds .json to each input file name. Overwrites existing output files. Tries to create the directory if it does not exist. An input directory must be provided for use with this option.", metavar="FILE")
 
     parser.add_argument('-b','--batch-size', action="store", default="8",type=str, required=False, help='Batch size for the GPU processing.')
 
@@ -904,19 +904,19 @@ def main():
 
     args = parser.parse_args()
 
-    if args.batch_size is not None:
+    if args.batch_size:
         try:
             BATCH_SIZE=int(args.batch_size)
         except:
             pass
 
-    if args.language_identificator_batch_size is not None:
+    if args.language_identificator_batch_size:
         try:
             LANGUAGE_IDENTIFICATIOR_BATCH_SIZE = int(args.language_identificator_batch_size)
         except:
             pass
 
-    if args.filename is not None:
+    if args.filename:
         if os.path.isfile(args.filename):
             load_models_and_config()
             strs=split_titles(open(args.filename,"r").read().strip().replace("\r",""))
@@ -925,9 +925,9 @@ def main():
         else:
             print("The file " + args.filename + " could not be found.")
             exit(1)
-    elif args.input_dir is not None and args.output_dir is not None:
             input_dir=str(args.input_dir)
             output_dir=str(args.output_dir)
+    elif args.input_dir and args.output_dir:
             output_suf = ".tsv" if args.output_tsv else ".json"
 
             if not os.path.isdir(input_dir):
