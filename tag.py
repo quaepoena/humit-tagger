@@ -812,7 +812,7 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
             outputs.logits=outputs.logits.to("cpu")
             torch.cuda.empty_cache()
 
-        for i in range(int(classification_output.size()[0])):            
+        for i in range(int(classification_output.size()[0])):
             classes = [CLASS_TO_LABEL[ CLASSIFICATION_MODEL.config.id2label[t.item()] ] if CLASSIFICATION_MODEL.config.id2label[t.item()] in CLASS_TO_LABEL else "" for t in classification_output[i]]
             tag=[]
             prepend_to_next=False
