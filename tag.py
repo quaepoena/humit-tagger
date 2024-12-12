@@ -925,17 +925,12 @@ def main():
         else:
             print("The file " + args.filename + " could not be found.")
             exit(1)
-            input_dir=str(args.input_dir)
-            output_dir=str(args.output_dir)
     elif args.input_dir and args.output_dir:
             output_suf = ".tsv" if args.output_tsv else ".json"
 
-            if not os.path.isdir(input_dir):
+            if not os.path.isdir(args.input_dir):
                 print("The input directory " + args.input_dir  + " could not be found.")
                 exit(1)
-
-            if output_dir[-1]=="/" or output_dir[-1]=="\\" :
-                output_dir=output_dir[0:-1]
 
             if not os.path.isdir(output_dir):
                 os.makedirs(output_dir)
