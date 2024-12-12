@@ -9,7 +9,6 @@ from transformers import BertTokenizerFast
 from transformers import BertModel
 from transformers import AutoModelForTokenClassification
 from functools import cmp_to_key
-import ntpath
 import logging
 import re
 import pickle
