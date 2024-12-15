@@ -9,7 +9,6 @@ from transformers import BertTokenizerFast
 from transformers import BertModel
 from transformers import AutoModelForTokenClassification
 from functools import cmp_to_key
-import ntpath
 import logging
 import re
 import pickle
@@ -812,7 +811,7 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
             outputs.logits=outputs.logits.to("cpu")
             torch.cuda.empty_cache()
 
-        for i in range(int(classification_output.size()[0])):            
+        for i in range(int(classification_output.size()[0])):
             classes = [CLASS_TO_LABEL[ CLASSIFICATION_MODEL.config.id2label[t.item()] ] if CLASSIFICATION_MODEL.config.id2label[t.item()] in CLASS_TO_LABEL else "" for t in classification_output[i]]
             tag=[]
             prepend_to_next=False
@@ -872,14 +871,6 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
     if return_as_object:
         return all_tags_object
 
-def get_base_name(path_and_file_name):
-    path, f_name = ntpath.split(path_and_file_name)
-    if f_name:
-        return f_name
-    else:
-        # fix the problem of paths ending with /
-        return ntpath.basename(path)
-
 def main():
     global BATCH_SIZE
     parser = argparse.ArgumentParser()
@@ -891,11 +882,11 @@ def main():
                     help='Tag Nynorsk')
     parser.add_argument("-au", "--au", dest='spraak', action='store_const', const='au', default='au',
                     help='Identify the langauge (default)')
-    parser.add_argument("-i", "--input-dir", dest="input_dir",
-                    help="directory to process each file in it. Operates non-recursive. An output directory must be provided for use with this option. The language is identified automatic for each file if no language is set.", metavar="FILE")
+    parser.add_argument("-i", "--input-dir", dest="input_dir", type=str,
+                        help="directory to process each file in it. Operates non-recursive. An output directory must be provided for use with this option. The language is identified automatic for each file if no language is set.", metavar="FILE")
     parser.add_argument("-t", "--tsv", dest='output_tsv', action='store_const', const=True, default=False, help="output in tab separated format.")
-    parser.add_argument("-o", "--output-dir", dest="output_dir",
-                    help="directory to output tagging. Adds .json to each input file name. Overwrites existing output files. Tries to create the directory if it does not exist. An input directory must be provided for use with this option.", metavar="FILE")
+    parser.add_argument("-o", "--output-dir", dest="output_dir", type=str,
+                        help="directory to output tagging. Adds .json to each input file name. Overwrites existing output files. Tries to create the directory if it does not exist. An input directory must be provided for use with this option.", metavar="FILE")
 
     parser.add_argument('-b','--batch-size', action="store", default="8",type=str, required=False, help='Batch size for the GPU processing.')
 
@@ -904,19 +895,19 @@ def main():
 
     args = parser.parse_args()
 
-    if args.batch_size is not None:
+    if args.batch_size:
         try:
             BATCH_SIZE=int(args.batch_size)
         except:
             pass
 
-    if args.language_identificator_batch_size is not None:
+    if args.language_identificator_batch_size:
         try:
             LANGUAGE_IDENTIFICATIOR_BATCH_SIZE = int(args.language_identificator_batch_size)
         except:
             pass
 
-    if args.filename is not None:
+    if args.filename:
         if os.path.isfile(args.filename):
             load_models_and_config()
             strs=split_titles(open(args.filename,"r").read().strip().replace("\r",""))
@@ -925,37 +916,29 @@ def main():
         else:
             print("The file " + args.filename + " could not be found.")
             exit(1)
-    elif args.input_dir is not None and args.output_dir is not None:
-            input_dir=str(args.input_dir)
-            output_dir=str(args.output_dir)
+    elif args.input_dir and args.output_dir:
             output_suf = ".tsv" if args.output_tsv else ".json"
 
-            if not os.path.isdir(input_dir):
+            if not os.path.isdir(args.input_dir):
                 print("The input directory " + args.input_dir  + " could not be found.")
                 exit(1)
 
-            if output_dir[-1]=="/" or output_dir[-1]=="\\" :
-                output_dir=output_dir[0:-1]
-
-            if not os.path.isdir(output_dir):
-                os.makedirs(output_dir)
+            os.makedirs(args.output_dir, exist_ok=True)
 
             load_models_and_config()
 
-            with os.scandir(input_dir) as f_names:
-                for f_name in f_names:
-                    if f_name.is_file():
-                        output_f_name = output_dir + "/" +  get_base_name(f_name) + output_suf
+            for dir_path, _, files in os.walk(args.input_dir):
+                for f in files:
+                    f_name = os.path.join(dir_path, f)
+                    output_f_name = os.path.join(args.output_dir, f) + output_suf
 
-                        print("Input: " + str(f_name.path) +" ,  Output: " + output_f_name)
+                    print("Input: " + f_name + ", Output: " + output_f_name)
 
-                        with open(f_name,"r") as infile:
-                            with open(output_f_name,"w") as outfile:
-                                strs=split_titles(infile.read().strip().replace("\r",""))
-                                for s in strs:
-                                    tag(s, outfile, args.spraak, args.output_tsv)
-                    else:
-                        print("Input: " + str(f_name) + " , Not a file. No output. Skipping.")
+                    with open(f_name, "r") as infile:
+                        with open(output_f_name, "w") as outfile:
+                            strs=split_titles(infile.read().strip().replace("\r",""))
+                            for s in strs:
+                                tag(s, outfile, args.spraak, args.output_tsv)
 
 if __name__ == '__main__':
     main()
