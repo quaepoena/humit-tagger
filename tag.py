@@ -79,7 +79,7 @@ NN_TO_BM ={
         "<st-verb>": "<s-verb>"
         }
 
-MAIN_TAG_LIST_NN=['$punc$', '1', '2', '3', '<anf>', '<komma>', '<parentes-beg>', '<parentes-slutt>', '<strek>', 'adj', 'adv', 'det', 'inf-merke', 'interj', 'konj', 'prep', 'pron', 'sbu', 'subst', 'symb', 'ukjent', 'verb', '<adj>', '<adv>', '<dato>', '<ellipse>', '<kolon>', '<next_token>', '<ordenstal>', '<perf-part>', '<pres-part>', '<punkt>', '<romartal>', '<semi>', '<spm>', '<st-verb>', '<utrop>', 'akk', 'appell', 'bu', 'dem', 'eint', 'fem', 'fl', 'fork', 'forst', 'gen', 'hum', 'høfleg', 'imp', 'inf', 'komp', 'kvant', 'm/f', 'mask', 'nom', 'nøyt', 'pass', 'perf-part', 'pers', 'pos', 'poss', 'pres', 'pret', 'prop', 'refl', 'res', 'sp', 'sup', 'symb', 'ub', 'ubøy', 'ufl']
+MAIN_TAG_LIST_NN=["$punc$", "1", "2", "3", "<anf>", "<komma>", "<parentes-beg>", "<parentes-slutt>", "<strek>", "adj", "adv", "det", "inf-merke", "interj", "konj", "prep", "pron", "sbu", "subst", "symb", "ukjent", "verb", "<adj>", "<adv>", "<dato>", "<ellipse>", "<kolon>", "<next_token>", "<ordenstal>", "<perf-part>", "<pres-part>", "<punkt>", "<romartal>", "<semi>", "<spm>", "<st-verb>", "<utrop>", "akk", "appell", "bu", "dem", "eint", "fem", "fl", "fork", "forst", "gen", "hum", "høfleg", "imp", "inf", "komp", "kvant", "m/f", "mask", "nom", "nøyt", "pass", "perf-part", "pers", "pos", "poss", "pres", "pret", "prop", "refl", "res", "sp", "sup", "symb", "ub", "ubøy", "ufl"]
 MAIN_TAG_LIST_BM=None
 INT_TOKENIZATION_DEVICE=-1
 
@@ -345,7 +345,7 @@ def load_models_and_config():
         SEGMENTATION_DEVICE="cuda:" + str(INT_SEGMENTATION_DEVICE)
 
 
-    TAG_ENC_TOKENIZER = BertTokenizerFast.from_pretrained('NbAiLab/nb-bert-base')
+    TAG_ENC_TOKENIZER = BertTokenizerFast.from_pretrained("NbAiLab/nb-bert-base")
     SEGMENTATION_TOKENIZER = TAG_ENC_TOKENIZER
     SEGMENTATION_TOKENIZER.model_max_length=512
 
@@ -411,10 +411,10 @@ def load_models_and_config():
     ID2LABEL=model_config["id2label"]
     ID2LABEL={i:"bm" if ID2LABEL[i]==BOKMAL_LABEL else "nn" if ID2LABEL[i]==NYNORSK_LABEL else "" for i in ID2LABEL}
 
-    with open(NN_FULLFORM_LIST_PATH, 'rb') as handle:
+    with open(NN_FULLFORM_LIST_PATH, "rb") as handle:
         NN_FULLFORM_LIST = pickle.load(handle)
 
-    with open(BM_FULLFORM_LIST_PATH, 'rb') as handle:
+    with open(BM_FULLFORM_LIST_PATH, "rb") as handle:
         BM_FULLFORM_LIST = pickle.load(handle)
 
 
@@ -626,7 +626,7 @@ def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identi
     row_count=int(old_size/MAX_LENGTH_WITHOUT_CLS) + 1
 
     # Do padding with Zeros to the pad_size that we have calculated.
-    encodings["input_ids"] = torch.nn.functional.pad(input=encodings["input_ids"], pad=(0, pad_size), mode='constant', value=0)
+    encodings["input_ids"] = torch.nn.functional.pad(input=encodings["input_ids"], pad=(0, pad_size), mode="constant", value=0)
 
     # Set the last token as SENTENCE END (SEP)
     encodings["input_ids"][0][old_size]=MODEL_SENTENCE_END_ID
@@ -876,21 +876,39 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-f", "--file", dest="filename",
                     help="file to process. Output to stdout.", metavar="FILE")
-    parser.add_argument("-bm", "--bokmal", dest='spraak', action='store_const', const='bm', default='au',
-                    help='Tag Bokmål')
-    parser.add_argument("-nn", "--nynorsk", dest='spraak', action='store_const', const='nn', default='au',
-                    help='Tag Nynorsk')
-    parser.add_argument("-au", "--au", dest='spraak', action='store_const', const='au', default='au',
-                    help='Identify the langauge (default)')
+    parser.add_argument("-bm", "--bokmal", dest="spraak", action="store_const",
+                        const="bm", default="au",
+                    help="Tag Bokmål")
+    parser.add_argument("-nn", "--nynorsk", dest="spraak", action="store_const",
+                        const="nn", default="au",
+                    help="Tag Nynorsk")
+    parser.add_argument("-au", "--au", dest="spraak", action="store_const",
+                        const="au", default="au",
+                    help="Identify the langauge (default)")
     parser.add_argument("-i", "--input-dir", dest="input_dir", type=str,
-                        help="directory to process each file in it. Operates non-recursive. An output directory must be provided for use with this option. The language is identified automatic for each file if no language is set.", metavar="FILE")
-    parser.add_argument("-t", "--tsv", dest='output_tsv', action='store_const', const=True, default=False, help="output in tab separated format.")
+                        help="Directory to process each file in it. Operates "
+                        "recursively. An output directory must be provided for "
+                        "use with this option. The language is identified "
+                        "automatically for each file if no language is set.",
+                        metavar="FILE")
+    parser.add_argument("-t", "--tsv", dest="output_tsv", action="store_const",
+                        const=True, default=False, help="Output in tab-separated format.")
     parser.add_argument("-o", "--output-dir", dest="output_dir", type=str,
-                        help="directory to output tagging. Adds .json to each input file name. Overwrites existing output files. Tries to create the directory if it does not exist. An input directory must be provided for use with this option.", metavar="FILE")
+                        help="Directory to output tagging. Adds .json to each "
+                        "input file name. Overwrites existing output files. "
+                        "Tries to create the directory if it does not exist. "
+                        "--input-dir must be provided for use with this option.",
+                        metavar="FILE")
 
-    parser.add_argument('-b','--batch-size', action="store", default="8",type=str, required=False, help='Batch size for the GPU processing.')
+    parser.add_argument("-b","--batch-size", action="store", default="8",
+                        type=str, required=False,
+                        help="Batch size for the GPU processing.")
 
-    parser.add_argument('-lb','--language-identificator-batch-size', action="store", default="4",type=str, required=False, help='Batch size for the GPU processing used in language identification. This must be less than the normal batch size since the whole input space of the model is utilized.')
+    parser.add_argument("-lb","--language-identificator-batch-size",
+                        action="store", default="4",type=str, required=False,
+                        help="Batch size for the GPU processing used in language "
+                        "identification. This must be less than the normal batch "
+                        "size since the whole input space of the model is utilized.")
 
 
     args = parser.parse_args()
@@ -940,5 +958,8 @@ def main():
                             for s in strs:
                                 tag(s, outfile, args.spraak, args.output_tsv)
 
-if __name__ == '__main__':
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
     main()
