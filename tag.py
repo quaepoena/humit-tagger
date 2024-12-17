@@ -466,10 +466,15 @@ def get_lemma_after_check(word, indice, tags, LIST):
     global SUBST_TAG
     global PROP_TAG
 
+
 #    global general_counter ###
 #    if indice==1:
 #        print(general_counter)
 #        general_counter+=1
+
+    # Set hard limit for recursion. Handy when words are not recognized by the tokenizer
+    if indice>300:
+        return None
 
     # If the word is only one character return None
     if len(word[indice:])<=1:
