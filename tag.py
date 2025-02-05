@@ -14,74 +14,74 @@ import re
 import pickle
 logging.getLogger("transformers.tokenization_utils_base").setLevel(logging.ERROR)
 
-os.environ["TOKENIZERS_PARALLELISM"]="false"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
 
-#general_counter=0
-#general_counter_all=0
+#general_counter = 0
+#general_counter_all = 0
 
 # GLOBAL VARIABLES (CAN BE USED TO CONFIGURE)
-SCRIPT_PATH=os.path.abspath(os.path.dirname(__file__))
-MODEL_SENTENCE_START_ID=101
-MODEL_SENTENCE_END_ID=102
-BATCH_SIZE=32
-LANGUAGE_IDENTIFICATIOR_BATCH_SIZE=8
-MANUAL_DEVICES=[]
-LABEL_LIST_FILE = os.path.abspath(os.path.dirname(__file__)) + "/models/label_list.txt"
-LABEL_CLASSES_FILE= SCRIPT_PATH + "/models/labels_classifier.txt"
-LABEL_ORDER_FILE= SCRIPT_PATH + "/models/labels_order.json"
-MODELS_DIR= SCRIPT_PATH + "/models"
-NN_FULLFORM_LIST_PATH = SCRIPT_PATH + "/nn.pickle"
-BM_FULLFORM_LIST_PATH = SCRIPT_PATH + "/bm.pickle"
-BOKMAL_LABEL="B"
-NYNORSK_LABEL="N"
-BOKMAL_LABEL_ID=1
-NYNORSK_LABEL_ID=2
-NN_FULLFORM_LIST=None
-BM_FULLFORM_LIST=None
-ID2LABEL=None
-LABEL2ID=None
-LABEL_ORDER=None
-PUNCTUATION=set([4,5,6,7,8,26,31,34,36,52,69])
-IGNORE_BERT_TAGS={"$punc$"}
-SUBST_TAG=18
-PROP_TAG=64
-GEN_TAG=46
-UKJENT_TAG=20
-SECOND_PERSON_TAG=2
-EQUAL_TAGS={":subst:":"subst",
-            ":ukjent:": "ukjent",
-            ":adj:":"adj",
-            ":prep:":"prep",
-            ":verb:":"verb",
-            ":det:":"det",
-            ":konj:":"konj",
-            ":pron:":"pron",
-            ":adv:":"adv",
-            ":inf-merke:":"inf-merke",
-            ":<anf>:":"<anf>",
-            ":sbu:":"sbu",
-            ":clb:":"clb",
-            ":<komma>:":"<komma>",
-            ":<strek>:":"<strek>",
-            ":<parentes-beg>:":"<parentes-beg>",
-            ":<parentes-slutt>:":"<parentes-slutt>",
-            ":interj:":"interj",
-            ":symb:":"symb"
-            }
+SCRIPT_PATH = os.path.abspath(os.path.dirname(__file__))
+MODEL_SENTENCE_START_ID = 101
+MODEL_SENTENCE_END_ID = 102
+BATCH_SIZE = 32
+LANGUAGE_IDENTIFICATIOR_BATCH_SIZE = 8
+MANUAL_DEVICES = []
+MODELS_DIR = os.path.join(SCRIPT_PATH, "models")
+LABEL_LIST_FILE = os.path.join(MODELS_DIR,"label_list.txt")
+LABEL_CLASSES_FILE = os.path.join(MODELS_DIR, "labels_classifier.txt")
+LABEL_ORDER_FILE = os.path.join(MODELS_DIR, "labels_order.json")
+NN_FULLFORM_LIST_PATH = os.path.join(SCRIPT_PATH, "nn.pickle")
+BM_FULLFORM_LIST_PATH = os.path.join(SCRIPT_PATH, "bm.pickle")
+BOKMAL_LABEL = "B"
+NYNORSK_LABEL = "N"
+BOKMAL_LABEL_ID = 1
+NYNORSK_LABEL_ID = 2
+NN_FULLFORM_LIST = None
+BM_FULLFORM_LIST = None
+ID2LABEL = None
+LABEL2ID = None
+LABEL_ORDER = None
+PUNCTUATION = set([4,5,6,7,8,26,31,34,36,52,69])
+IGNORE_BERT_TAGS = {"$punc$"}
+SUBST_TAG = 18
+PROP_TAG = 64
+GEN_TAG = 46
+UKJENT_TAG = 20
+SECOND_PERSON_TAG = 2
+EQUAL_TAGS = {":subst:":"subst",
+              ":ukjent:": "ukjent",
+              ":adj:":"adj",
+              ":prep:":"prep",
+              ":verb:":"verb",
+              ":det:":"det",
+              ":konj:":"konj",
+              ":pron:":"pron",
+              ":adv:":"adv",
+              ":inf-merke:":"inf-merke",
+              ":<anf>:":"<anf>",
+              ":sbu:":"sbu",
+              ":clb:":"clb",
+              ":<komma>:":"<komma>",
+              ":<strek>:":"<strek>",
+              ":<parentes-beg>:":"<parentes-beg>",
+              ":<parentes-slutt>:":"<parentes-slutt>",
+              ":interj:":"interj",
+              ":symb:":"symb"
+}
 
-NN_TO_BM ={
-        "høfleg":"høflig",
-        "eint":"ent",
-        "<ikkje-clb>": "<ikke-clb>",
-        "<ordenstal>": "<ordenstall>",
-        "<romartal>" : "<romertall>",
-        "bu": "be",
-        "<st-verb>": "<s-verb>"
-        }
+NN_TO_BM = {
+    "høfleg":"høflig",
+    "eint":"ent",
+    "<ikkje-clb>": "<ikke-clb>",
+    "<ordenstal>": "<ordenstall>",
+    "<romartal>" : "<romertall>",
+    "bu": "be",
+    "<st-verb>": "<s-verb>"
+}
 
-MAIN_TAG_LIST_NN=["$punc$", "1", "2", "3", "<anf>", "<komma>", "<parentes-beg>", "<parentes-slutt>", "<strek>", "adj", "adv", "det", "inf-merke", "interj", "konj", "prep", "pron", "sbu", "subst", "symb", "ukjent", "verb", "<adj>", "<adv>", "<dato>", "<ellipse>", "<kolon>", "<next_token>", "<ordenstal>", "<perf-part>", "<pres-part>", "<punkt>", "<romartal>", "<semi>", "<spm>", "<st-verb>", "<utrop>", "akk", "appell", "bu", "dem", "eint", "fem", "fl", "fork", "forst", "gen", "hum", "høfleg", "imp", "inf", "komp", "kvant", "m/f", "mask", "nom", "nøyt", "pass", "perf-part", "pers", "pos", "poss", "pres", "pret", "prop", "refl", "res", "sp", "sup", "symb", "ub", "ubøy", "ufl"]
-MAIN_TAG_LIST_BM=None
-INT_TOKENIZATION_DEVICE=-1
+MAIN_TAG_LIST_NN = ["$punc$", "1", "2", "3", "<anf>", "<komma>", "<parentes-beg>", "<parentes-slutt>", "<strek>", "adj", "adv", "det", "inf-merke", "interj", "konj", "prep", "pron", "sbu", "subst", "symb", "ukjent", "verb", "<adj>", "<adv>", "<dato>", "<ellipse>", "<kolon>", "<next_token>", "<ordenstal>", "<perf-part>", "<pres-part>", "<punkt>", "<romartal>", "<semi>", "<spm>", "<st-verb>", "<utrop>", "akk", "appell", "bu", "dem", "eint", "fem", "fl", "fork", "forst", "gen", "hum", "høfleg", "imp", "inf", "komp", "kvant", "m/f", "mask", "nom", "nøyt", "pass", "perf-part", "pers", "pos", "poss", "pres", "pret", "prop", "refl", "res", "sp", "sup", "symb", "ub", "ubøy", "ufl"]
+MAIN_TAG_LIST_BM = None
+INT_TOKENIZATION_DEVICE = -1
 
 def get_one_gpu(final_devices, one_model_devices, two_model_devices, three_model_devices):
     # Find one more available GPU:
@@ -351,19 +351,22 @@ def load_models_and_config():
 
     MAX_LENGTH_WITHOUT_CLS=SEGMENTATION_TOKENIZER.model_max_length-1
 
-    CLASSIFICATION_MODEL = AutoModelForTokenClassification.from_pretrained(MODELS_DIR + "/classification/")
+    CLASSIFICATION_MODEL = AutoModelForTokenClassification.from_pretrained(
+        os.path.join(MODELS_DIR, "classification"))
     CLASSIFICATION_MODEL.to(CLASSIFICATION_DEVICE)
     CLASSIFICATION_MODEL.eval()
 
-    TOKENIZATION_MODEL = AutoModelForTokenClassification.from_pretrained(MODELS_DIR + "/tokenization/")
+    TOKENIZATION_MODEL = AutoModelForTokenClassification.from_pretrained(
+        os.path.join(MODELS_DIR, "tokenization"))
     TOKENIZATION_MODEL.to(TOKENIZATION_DEVICE)
     TOKENIZATION_MODEL.eval()
 
-    SEGMENTATION_MODEL = AutoModelForTokenClassification.from_pretrained(MODELS_DIR + "/sentence_segmentation/")
+    SEGMENTATION_MODEL = AutoModelForTokenClassification.from_pretrained(
+        os.path.join(MODELS_DIR, "sentence_segmentation"))
     SEGMENTATION_MODEL.to(SEGMENTATION_DEVICE)
     SEGMENTATION_MODEL.eval()
 
-    all_vocab=open(MODELS_DIR + "/sentence_segmentation/vocab.txt","r").read().replace("\r","").split("\n")
+    all_vocab=open(os.path.join(MODELS_DIR, "sentence_segmentation", "vocab.txt"),"r").read().replace("\r","").split("\n")
     TOKENS_STARTING_WITH_HASH=torch.zeros( len(all_vocab), dtype=torch.bool, device=TOKENIZATION_MODEL.device)
 
     for i,j in enumerate(all_vocab):
@@ -407,7 +410,8 @@ def load_models_and_config():
     for i in CLASS_TO_LABEL_BM:
         CLASS_TO_LABEL_BM[i]=[MAIN_TAG_LIST_DICT_BM[j] for j in CLASS_TO_LABEL_BM[i]]
 
-    model_config=json.load(open(MODELS_DIR + "/sentence_segmentation/config.json","r"))
+    model_config=json.load(open(
+        os.path.join(MODELS_DIR, "sentence_segmentation", "config.json"), "r"))
     ID2LABEL=model_config["id2label"]
     ID2LABEL={i:"bm" if ID2LABEL[i]==BOKMAL_LABEL else "nn" if ID2LABEL[i]==NYNORSK_LABEL else "" for i in ID2LABEL}
 
