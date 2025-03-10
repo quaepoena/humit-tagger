@@ -79,14 +79,14 @@ def index():
             output_content = io.StringIO()
             lang_used = io.StringIO()
 
-            sentences = tag(text, output_content, lang, frmt, lang_used , True)
+            sentences = tag_text(text, output_content, lang, frmt, lang_used , True)
 
             all_tagged = output_content.getvalue()
             lang_tag = lang_used.getvalue()
             output_content.close()
             lang_used.close()
 
-            to_return = {"lang":lang_tag,"sentences":all_tagged if frmt else sentences}, 200, {'Content-Type': 'application/json'}
+            to_return = {"lang":lang_tag[0:2],"sentences":all_tagged if frmt else sentences}, 200, {'Content-Type': 'application/json'}
         except Exception as E:
             to_return = {"error":"There is an error: " + str(E)}, 500,{'Content-Type': 'application/json'} 
     return to_return

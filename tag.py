@@ -564,6 +564,12 @@ def matcher(o):
 def split_titles(txt):
     return [i.replace("\n"," ") for i in re.sub(r"[^.!\?](\n)([^a-z,æ,ø,å,\\ ])", matcher, txt).split("\n\n")]
 
+# This function is called from web iinterfaces instead of tag()
+# This function will first do the title analysis and then tag the sentences.
+def tag_text(text , write_output_to,  given_lang="au", output_tsv=False, write_identified_lang_to=None, return_as_object=False):
+    strs=split_titles(text.strip().replace("\r",""))
+    return [tag(s, write_output_to, given_lang, output_tsv, write_identified_lang_to, return_as_object) for s in strs]
+
 # Keeping this function in comment jsut in case tags don't include kvant
 #def is_numeric_value(s):
 #    if s[0]=="-" and s[1].isnumeric():
