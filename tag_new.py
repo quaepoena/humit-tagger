@@ -2,7 +2,10 @@ import os
 import argparse
 import json
 import re
+import sys
+import torch
 from functools import cmp_to_key
+from transformers import AutoModelForTokenClassification, AutoTokenizer
 
 BATCH_SIZE=32
 LANGUAGE_IDENTIFICATIOR_BATCH_SIZE=8
@@ -10,12 +13,15 @@ MAX_LENGTH=512
 TOKENIZER="ltg/norbert3-large"
 SEGMENTATION_DEVICE="cuda:0"
 CLASSIFICATION_DEVICE="cuda:0"
-SEGMENTATION_MODEL="cuda:0"
-CLASSIFICATION_MODEL="cuda:0"
+SEGMENTATION_MODEL=None
+CLASSIFICATION_MODEL=None
 SCRIPT_PATH=os.path.abspath(os.path.dirname(__file__))
-LABEL_LIST_FILE = os.path.abspath(os.path.dirname(__file__)) + "/models/label_list.txt"
-LABEL_CLASSES_FILE= SCRIPT_PATH + "/models/labels_classifier.txt"
-LABEL_ORDER_FILE= SCRIPT_PATH + "/models/labels_order.json"
+MODELS_DIR=SCRIPT_PATH + "/models"
+LABEL_LIST_FILE = MODELS_DIR + "/label_list.txt"
+LABEL_CLASSES_FILE = MODELS_DIR + "/labels_classifier.txt"
+LABEL_ORDER_FILE = MODELS_DIR + "/labels_order.json"
+SEGMENTATION_MODEL_DIR = MODELS_DIR + "/sentence_segmentation/"
+CLASSIFICATION_MODEL_DIR = MODELS_DIR + "/classification/"
 LABEL_ORDER = None
 CLASS_TO_LABEL_BM = None
 CLASS_TO_LABEL_NN = None
@@ -70,6 +76,8 @@ def load_models_and_config():
     global LABEL_ORDER
     global LABEL_CLASSES_FILE
     global LABEL_LIST_FILE
+    global SEGMENTATION_MODEL_DIR
+    global CLASSIFICATION_MODEL_DIR
 
     with open(LABEL_ORDER_FILE, "r") as f:
         LABEL_ORDER = json.load(f)
@@ -89,7 +97,6 @@ def load_models_and_config():
     cmp_key = cmp_to_key(compare_label)
 
     CLASS_TO_LABEL_NN={c:sorted(list(CLASS_TO_LABEL_NN[c]),key=cmp_key) for c in CLASS_TO_LABEL_NN}
-#    CLASS_TO_LABEL_NN={c:[EQUAL_TAGS[i] if i in EQUAL_TAGS else i for i in CLASS_TO_LABEL_NN[c] ]  for c in CLASS_TO_LABEL_NN }
     CLASS_TO_LABEL_BM={c:[NN_TO_BM[i] if i in NN_TO_BM else i for i in CLASS_TO_LABEL_NN[c]]   for c in CLASS_TO_LABEL_NN}
 
 
@@ -104,9 +111,39 @@ def load_models_and_config():
     for i in CLASS_TO_LABEL_BM:
         CLASS_TO_LABEL_BM[i]=[MAIN_TAG_LIST_DICT_BM[j] for j in CLASS_TO_LABEL_BM[i]]
 
+    SEGMENTATION_MODEL = AutoModelForTokenClassification.from_pretrained(SEGMENTATION_MODEL_DIR, trust_remote_code=True)
+    SEGMENTATION_MODEL.to(SEGMENTATION_DEVICE)
+    SEGMENTATION_MODEL.eval()
+
+    CLASSIFICATION_MODEL = AutoModelForTokenClassification.from_pretrained(CLASSIFICATION_MODEL_DIR, trust_remote_code=True)
+    CLASSIFICATION_MODEL.to(CLASSIFICATION_DEVICE)
+    CLASSIFICATION_MODEL.eval()
+
+    TOKENIZER = AutoTokenizer.from_pretrained(TOKENIZER, trust_remote_code=True)
+
+
 #    model_config=json.load(open(MODELS_DIR + "/sentence_segmentation/config.json","r"))
 #    ID2LABEL=model_config["id2label"]
 #    ID2LABEL={i:"bm" if ID2LABEL[i]==BOKMAL_LABEL else "nn" if ID2LABEL[i]==NYNORSK_LABEL else "" for i in ID2LABEL}
+
+
+
+def tag(text , write_output_to,  given_lang="au", output_tsv=False, write_identified_lang_to=None, return_as_object=False):
+    global TOKENIZER
+    global SEGMENTATION_DEVICE
+    global SEGMENTATION_MODEL
+    global CLASSIFICATION_MODEL
+    global CLASSIFICATION_DEVICE
+
+    # Just to empty anything allocated on GPU.
+    torch.cuda.empty_cache()
+
+    # Here we get the whole text tokenized.
+    text=text.replace("\n", " ")
+    encodings = TOKENIZER(text,add_special_tokens=False, return_tensors="pt").to(SEGMENTATION_MODEL.device)
+
+    print(encodings)
+    exit(0)
 
 def matcher(o):
     return o.group(0)[0] + "\n\n" + o.group(0)[2]
